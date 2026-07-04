@@ -9,9 +9,19 @@ and it sticks), you switch inboxes with `⌘1…⌘9`, and the Dock badge adds u
 the unread mail of every account even when the window is closed.
 
 **Download:** [Releases](https://github.com/MatiasSanchezCabrera/gtray/releases/latest) ·
-**Website:** [gtray.app](https://gtray.app)
+**Website:** [gtray.app](https://gtray.app) ·
+**Support:** [Ko-fi](https://ko-fi.com/gtray)
 
 > Requires macOS 13+ on Apple Silicon.
+
+## Why
+
+GTray is built around three simple principles:
+
+1. I don't want to check my inbox from a browser tab.
+2. Gmail's web experience is just fine — no need to reinvent it.
+3. I want to know which account needs my attention at a glance, straight
+   from the Dock.
 
 ## Why you can trust it
 
@@ -67,6 +77,12 @@ user agent and hides Chromium's fingerprints so the flow works (see
 `src/main/gmail-preload.ts` and `src/main/views.ts`). This is the most fragile
 part of the project: if Google hardens its detection, it may break until the
 app is updated.
+
+## Support
+
+If GTray makes your day a little easier, consider
+[supporting its development with a beer 🍺](https://ko-fi.com/gtray).
+It keeps the updates coming.
 
 ## License
 
