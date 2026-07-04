@@ -106,13 +106,14 @@
   .row.unread .subject { background: #d5d9e1; }
 
   .dock {
-    display: flex; align-items: flex-end; gap: 15px;
-    padding: 11px 18px;
+    display: flex; align-items: center; gap: 15px;
+    /* concentric: outer radius = tile radius (14) + padding (13) */
+    padding: 13px;
     background: rgba(255, 255, 255, 0.7);
     border: 1px solid #e4e5ea;
-    border-radius: 22px;
+    border-radius: 27px;
   }
-  .dock .app { width: 46px; height: 46px; border-radius: 12px; background: linear-gradient(145deg, #e7e8ec, #d3d5db); }
+  .dock .app { width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(145deg, #e7e8ec, #d3d5db); }
   .dock .gtray { position: relative; width: 56px; height: 56px; }
   .dock .gtray img { width: 56px; height: 56px; border-radius: 14px; display: block; }
   .dock .gtray .count {

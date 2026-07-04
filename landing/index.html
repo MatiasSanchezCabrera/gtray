@@ -188,13 +188,15 @@
 
   /* ---------- dock ---------- */
   .dock {
-    display: flex; align-items: flex-end; gap: 14px;
-    padding: 10px 16px;
+    display: flex; align-items: center; gap: 14px;
+    width: fit-content; margin: 0 auto;
+    /* concentric: outer radius = tile radius (13) + padding (12) */
+    padding: 12px;
     background: rgba(242, 242, 245, 0.85);
     border: 1px solid var(--line);
-    border-radius: 20px;
+    border-radius: 25px;
   }
-  .dock .app { width: 44px; height: 44px; border-radius: 11px; background: linear-gradient(145deg, #e7e8ec, #d3d5db); }
+  .dock .app { width: 52px; height: 52px; border-radius: 13px; background: linear-gradient(145deg, #e7e8ec, #d3d5db); }
   .dock .gtray { position: relative; width: 52px; height: 52px; }
   .dock .gtray img { width: 52px; height: 52px; border-radius: 13px; display: block; }
   .dock .gtray .count {
