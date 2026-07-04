@@ -1,0 +1,166 @@
+<!doctype html>
+<!-- Source for og.png (1200x630 social card). Regenerate with:
+     chrome --headless=new --screenshot=og.png --window-size=1200,630 \
+       --force-device-scale-factor=2 --hide-scrollbars file://$PWD/og.html -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face {
+    font-family: 'Lexend';
+    src: url('lexend.woff2') format('woff2');
+    font-weight: 100 900;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    font-family: 'Lexend', sans-serif;
+    background:
+      radial-gradient(900px 500px at 85% 20%, #ffffff 0%, rgba(255,255,255,0) 60%),
+      #f2f2f5;
+    color: #1d2129;
+    display: flex; align-items: center;
+    padding: 0 72px;
+    gap: 64px;
+  }
+
+  .left { flex: 1; min-width: 0; }
+  .brand { display: flex; align-items: center; gap: 18px; margin-bottom: 36px; }
+  .brand img { width: 84px; height: 84px; border-radius: 20px; box-shadow: 0 10px 26px -10px rgba(29,33,41,0.35); }
+  .brand span { font-size: 44px; font-weight: 620; letter-spacing: -0.02em; }
+  h1 {
+    font-size: 52px; font-weight: 620; line-height: 1.12;
+    letter-spacing: -0.022em; margin-bottom: 22px;
+  }
+  h1 .n {
+    display: inline-block; vertical-align: super;
+    font-size: 19px; font-weight: 600; line-height: 1;
+    background: #ff453a; color: #fff;
+    border-radius: 99px; padding: 6px 12px;
+  }
+  .tag { font-size: 22px; font-weight: 350; color: #5d6472; line-height: 1.5; max-width: 26ch; }
+  .url { margin-top: 34px; font-size: 20px; font-weight: 480; color: #1d2129; }
+  .url em { font-style: normal; color: #5d6472; font-weight: 350; }
+
+  .right { flex: none; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+
+  .window {
+    width: 470px;
+    background: #fff;
+    border: 1px solid #e4e5ea;
+    border-radius: 14px;
+    box-shadow: 0 30px 70px -22px rgba(29, 33, 41, 0.35);
+    overflow: hidden;
+  }
+  .titlebar {
+    height: 38px; background: #f2f2f5;
+    display: flex; align-items: center; padding: 0 14px; gap: 8px;
+    border-bottom: 1px solid #e4e5ea;
+  }
+  .light { width: 12px; height: 12px; border-radius: 50%; }
+  .light.r { background: #ff5f57; } .light.y { background: #febc2e; } .light.g { background: #28c840; }
+
+  .winbody { display: flex; height: 300px; }
+  .rail {
+    width: 62px; flex: none; background: #fff;
+    border-right: 1px solid #e4e5ea;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 14px 0; gap: 14px;
+  }
+  .acc { position: relative; width: 38px; height: 38px; flex: none; }
+  .acc .face {
+    width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 560; font-size: 16px;
+  }
+  .acc.a0 .face { background: #0e7490; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1d2129; }
+  .acc.a1 .face { background: #7c3aed; }
+  .acc.a2 .face { background: #d97706; }
+  .acc .count {
+    position: absolute; top: -7px; right: -7px;
+    min-width: 23px; height: 23px; padding: 0 5px;
+    display: flex; align-items: center; justify-content: center;
+    background: #ff453a; color: #fff;
+    font-size: 12px; font-weight: 600; line-height: 1;
+    border-radius: 99px; border: 2px solid #fff;
+  }
+  .addacc {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 1.5px dashed #e4e5ea; color: #5d6472;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 300;
+  }
+
+  .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
+  .searchbar { padding: 14px 16px 10px; }
+  .pill { height: 28px; border-radius: 99px; background: #f0f3f8; }
+  .row {
+    display: flex; align-items: center; gap: 11px;
+    padding: 11px 16px; border-top: 1px solid #f3f4f7;
+  }
+  .row .dot { width: 8px; height: 8px; border-radius: 50%; background: transparent; flex: none; }
+  .row.unread .dot { background: #ff453a; }
+  .row .from { width: 58px; height: 9px; border-radius: 5px; background: #dfe2e9; flex: none; }
+  .row.unread .from { background: #b9bec9; }
+  .row .subject { flex: 1; height: 9px; border-radius: 5px; background: #eceef3; }
+  .row.unread .subject { background: #d5d9e1; }
+
+  .dock {
+    display: flex; align-items: flex-end; gap: 15px;
+    padding: 11px 18px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid #e4e5ea;
+    border-radius: 22px;
+  }
+  .dock .app { width: 46px; height: 46px; border-radius: 12px; background: linear-gradient(145deg, #e7e8ec, #d3d5db); }
+  .dock .gtray { position: relative; width: 56px; height: 56px; }
+  .dock .gtray img { width: 56px; height: 56px; border-radius: 14px; display: block; }
+  .dock .gtray .count {
+    position: absolute; top: -8px; right: -10px;
+    min-width: 27px; height: 27px; padding: 0 7px;
+    display: flex; align-items: center; justify-content: center;
+    background: #ff453a; color: #fff;
+    font-size: 14px; font-weight: 600; line-height: 1;
+    border-radius: 99px; border: 2px solid #fff;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.25);
+  }
+</style>
+</head>
+<body>
+
+<div class="left">
+  <div class="brand"><img src="icon.png" alt=""><span>GTray</span></div>
+  <h1>All your Gmail inboxes, in a single app <span class="n">11</span></h1>
+  <p class="tag">Web experience intact. Unread counts in the Dock.</p>
+  <p class="url">gtray.app <em>· free · open source</em></p>
+</div>
+
+<div class="right">
+  <div class="window">
+    <div class="titlebar"><span class="light r"></span><span class="light y"></span><span class="light g"></span></div>
+    <div class="winbody">
+      <div class="rail">
+        <div class="acc a0"><div class="face">M</div><span class="count">3</span></div>
+        <div class="acc a1"><div class="face">D</div><span class="count">7</span></div>
+        <div class="acc a2"><div class="face">A</div><span class="count">1</span></div>
+        <div class="addacc">+</div>
+      </div>
+      <div class="pane">
+        <div class="searchbar"><div class="pill"></div></div>
+        <div class="row unread"><span class="dot"></span><span class="from"></span><span class="subject" style="width:82%"></span></div>
+        <div class="row unread"><span class="dot"></span><span class="from"></span><span class="subject" style="width:64%"></span></div>
+        <div class="row unread"><span class="dot"></span><span class="from"></span><span class="subject" style="width:74%"></span></div>
+        <div class="row"><span class="dot"></span><span class="from"></span><span class="subject" style="width:58%"></span></div>
+        <div class="row"><span class="dot"></span><span class="from"></span><span class="subject" style="width:70%"></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="dock">
+    <div class="app"></div>
+    <div class="gtray"><img src="icon.png" alt=""><span class="count">11</span></div>
+    <div class="app"></div>
+  </div>
+</div>
+
+</body>
+</html>
