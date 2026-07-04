@@ -49,6 +49,9 @@ jobs:
             npx electron-builder --mac dmg --publish never -c.mac.notarize=true
           else
             echo "No certificates: unsigned build"
+            # Absent secrets arrive as empty-but-defined vars; electron-builder
+            # would treat CSC_LINK="" as a certificate path, so drop them.
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
             CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg --publish never
           fi
 
