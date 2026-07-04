@@ -150,10 +150,11 @@
   .acc[data-a="2"] .face { background: var(--acc-3); }
   .acc.active .face { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ink); }
   .acc .count {
-    position: absolute; top: -5px; right: -7px;
-    min-width: 17px; height: 17px; padding: 0 4px;
+    position: absolute; top: -6px; right: -6px;
+    min-width: 21px; height: 21px; padding: 0 5px;
+    display: flex; align-items: center; justify-content: center;
     background: var(--badge); color: #fff;
-    font-size: 0.66rem; font-weight: 600; line-height: 17px; text-align: center;
+    font-size: 0.66rem; font-weight: 600; line-height: 1;
     border-radius: 99px; border: 2px solid #fff;
     transition: transform 0.25s ease, opacity 0.25s ease;
   }
@@ -194,9 +195,10 @@
   .dock .gtray img { width: 52px; height: 52px; border-radius: 13px; display: block; }
   .dock .gtray .count {
     position: absolute; top: -7px; right: -9px;
-    min-width: 21px; height: 21px; padding: 0 5px;
+    min-width: 25px; height: 25px; padding: 0 6px;
+    display: flex; align-items: center; justify-content: center;
     background: var(--badge); color: #fff;
-    font-size: 0.76rem; font-weight: 600; line-height: 21px; text-align: center;
+    font-size: 0.76rem; font-weight: 600; line-height: 1;
     border-radius: 99px; border: 2px solid #fff;
     box-shadow: 0 1px 4px rgba(0,0,0,0.2);
     transition: transform 0.25s ease, opacity 0.25s ease;
@@ -209,6 +211,27 @@
   h2 {
     font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 600;
     letter-spacing: -0.015em; margin-bottom: 28px; text-wrap: balance;
+  }
+
+  .creed { list-style: none; counter-reset: p; display: flex; flex-direction: column; gap: 20px; max-width: 62ch; }
+  .creed li {
+    counter-increment: p; position: relative; padding-left: 42px;
+    font-size: 1.12rem; line-height: 1.55;
+  }
+  .creed li::before {
+    content: counter(p);
+    position: absolute; left: 0; top: 2px;
+    width: 24px; height: 24px; border-radius: 99px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--badge); color: #fff;
+    font-size: 0.8rem; font-weight: 600; line-height: 1;
+  }
+
+  .support { text-align: center; }
+  .support p { font-size: 1.05rem; color: var(--ink-soft); max-width: 52ch; margin: 0 auto; }
+  .support a {
+    color: var(--ink); font-weight: 480; text-decoration: none;
+    border-bottom: 1.5px solid var(--ink); padding-bottom: 1px;
   }
 
   .feats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; }
@@ -325,6 +348,19 @@
 
   <section>
     <div class="wrap">
+      <p class="eyebrow">Why GTray exists</p>
+      <h2>Built around three simple principles</h2>
+      <ol class="creed">
+        <li>I don't want to check my inbox from a browser tab.</li>
+        <li>Gmail's web experience is just fine — no need to reinvent it.</li>
+        <li>I want to know which account needs my attention at a glance,
+        straight from the Dock.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
       <h2>A browser dedicated to your mail, not another client to learn</h2>
       <div class="feats">
         <div class="feat">
@@ -383,6 +419,14 @@
         <span><kbd>⌘R</kbd> reload</span>
         <span><kbd>⌘Q</kbd> quit (closing the window keeps it counting in the background)</span>
       </div>
+    </div>
+  </section>
+
+  <section class="support">
+    <div class="wrap">
+      <p>If GTray makes your day a little easier, consider supporting its
+      development <a href="https://ko-fi.com/gtray">with a beer 🍺</a>.
+      It keeps the updates coming.</p>
     </div>
   </section>
 </main>
