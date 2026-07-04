@@ -1,0 +1,67 @@
+# Release: pushing a v* tag builds, packages the .dmg and publishes a
+# GitHub Release with checksums. If the Apple signing secrets exist, it
+# signs and notarizes; otherwise it publishes an unsigned build (useful
+# before having an Apple Developer account).
+#
+# Secrets for signing/notarizing (Settings -> Secrets and variables -> Actions):
+#   CSC_LINK                     "Developer ID Application" certificate (.p12) in base64
+#   CSC_KEY_PASSWORD             password of the .p12
+#   APPLE_ID                     Apple ID of the developer account
+#   APPLE_APP_SPECIFIC_PASSWORD  app-specific password (appleid.apple.com)
+#   APPLE_TEAM_ID                Team ID (developer.apple.com -> Membership)
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14 # arm64 runner: produces the .dmg for Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run build
+
+      - name: Package .dmg (signs and notarizes if secrets exist)
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$CSC_LINK" ]; then
+            echo "Signing and notarizing"
+            npx electron-builder --mac dmg --publish never -c.mac.notarize=true
+          else
+            echo "No certificates: unsigned build"
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg --publish never
+          fi
+
+      - name: Checksums
+        run: |
+          cd release
+          shasum -a 256 *.dmg > checksums.txt
+          cat checksums.txt
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/*.dmg release/checksums.txt \
+            --title "GTray $GITHUB_REF_NAME" \
+            --generate-notes

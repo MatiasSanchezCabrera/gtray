@@ -1,0 +1,260 @@
+/* Local Lexend (variable 100-900, latin subset), bundled with the app:
+   no runtime requests to Google Fonts. Source: fonts.google.com/specimen/Lexend */
+@font-face {
+  font-family: 'Lexend';
+  font-style: normal;
+  font-weight: 100 900;
+  src: url('lexend.woff2') format('woff2');
+}
+
+:root {
+  --topbar-bg: #ececee; /* top row, light gray */
+  --sidebar-bg: #ffffff; /* white sidebar */
+  --sep: rgba(0, 0, 0, 0.1);
+  --muted: #6b7076;
+  --muted-strong: #202124;
+  --panel-bg: #f7f8fa;
+  --title: #202124;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --topbar-bg: #2c2c2e;
+    --sidebar-bg: #1f2022;
+    --sep: rgba(255, 255, 255, 0.1);
+    --muted: #9aa0a6;
+    --muted-strong: #ffffff;
+    --panel-bg: #1f2123;
+    --title: #e8eaed;
+  }
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--sidebar-bg);
+  font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* White sidebar, starts below the top row */
+#sidebar {
+  position: fixed;
+  top: 52px;
+  left: 0;
+  bottom: 0;
+  width: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 0 12px;
+  gap: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sep);
+  -webkit-app-region: drag;
+}
+
+#accounts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  width: 100%;
+  /* vertical padding: gives room so the container's overflow doesn't clip the
+     active indicator and the badge of the first and last avatars */
+  padding: 10px 0 12px;
+  overflow-y: auto;
+  overflow-x: clip;
+}
+
+.avatar {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color, #5f6368);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.7;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  -webkit-app-region: no-drag;
+}
+
+.avatar-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar:hover {
+  opacity: 0.9;
+  transform: scale(1.05);
+}
+
+.avatar.active {
+  opacity: 1;
+}
+
+/* Active account indicator: small bar on the left edge (Discord/Slack style),
+   in the account's color. Lives inside the avatar so overflow never clips it. */
+.avatar.active::before {
+  content: '';
+  position: absolute;
+  left: -15px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 26px;
+  background: var(--color, #5f6368);
+  border-radius: 0 4px 4px 0;
+}
+
+.badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  box-sizing: border-box;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: #e8453c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  /* flex centers the number on both axes without relying on line-height */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--sidebar-bg);
+}
+
+.warn {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fbbc04;
+  border: 2px solid var(--sidebar-bg);
+}
+
+#add {
+  flex-shrink: 0;
+  margin-top: 4px;
+  width: 44px;
+  height: 44px;
+  border: 2px dashed var(--muted);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+  -webkit-app-region: no-drag;
+}
+
+#add:hover {
+  opacity: 1;
+  color: var(--muted-strong);
+  border-color: var(--muted-strong);
+}
+
+/* Full-width top row (light gray). The macOS traffic lights live here. */
+#topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--topbar-bg);
+  border-bottom: 1px solid var(--sep);
+  -webkit-app-region: drag;
+}
+
+#topbar span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Donation button: discreet, in the top-right corner of the gray row */
+#donate {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.12s ease, background 0.12s ease;
+  -webkit-app-region: no-drag;
+}
+
+#donate:hover {
+  opacity: 1;
+  color: var(--muted-strong);
+  background: var(--sep);
+}
+
+#empty-state {
+  position: fixed;
+  top: 52px;
+  left: 72px;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-bg);
+}
+
+.empty-card {
+  max-width: 380px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty-card h1 {
+  margin-bottom: 10px;
+  font-size: 28px;
+  color: var(--title);
+}
+
+.empty-card p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.empty-card .hint {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.8;
+}

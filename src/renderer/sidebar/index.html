@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>GTray</title>
+  <link rel="stylesheet" href="sidebar.css" />
+</head>
+<body>
+  <aside id="sidebar">
+    <div id="accounts"></div>
+    <button id="add" title="Add account (⌘N)">+</button>
+  </aside>
+  <header id="topbar">
+    <span id="active-title"></span>
+    <button id="donate">Support this app 🍺</button>
+  </header>
+  <main id="empty-state">
+    <div class="empty-card">
+      <h1>GTray</h1>
+      <p>Add your first Gmail account with the <strong>+</strong> button in the left bar.</p>
+      <p class="hint">Each account keeps its own session: you sign in only once.</p>
+    </div>
+  </main>
+  <script src="sidebar.js"></script>
+</body>
+</html>

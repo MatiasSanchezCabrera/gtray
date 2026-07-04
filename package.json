@@ -1,0 +1,42 @@
+{
+  "name": "gtray",
+  "productName": "GTray",
+  "version": "0.1.0",
+  "description": "Minimal macOS Gmail wrapper: all your inboxes, the web experience intact",
+  "private": true,
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.docutray.gtray",
+    "productName": "GTray",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns",
+      "target": "dir",
+      "extendInfo": {
+        "NSBluetoothAlwaysUsageDescription": "GTray uses Bluetooth for security keys when signing in to Google."
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
+    "typescript": "^6.0.3"
+  }
+}

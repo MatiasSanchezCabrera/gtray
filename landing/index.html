@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GTray — your Gmail inboxes in one macOS app</title>
+<meta name="description" content="GTray brings all your Gmail accounts into a single macOS app: the web experience intact, isolated sessions, and unread counts always visible in the Dock. Open source (GPL-3.0).">
+<meta property="og:title" content="GTray — your Gmail inboxes in one macOS app">
+<meta property="og:description" content="Several Gmail accounts, one window. Unread counts always visible in the Dock. Open source.">
+<meta property="og:image" content="https://gtray.app/icon.png">
+<meta property="og:url" content="https://gtray.app">
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+  @font-face {
+    font-family: 'Lexend';
+    src: url('lexend.woff2') format('woff2');
+    font-weight: 100 900;
+    font-display: swap;
+  }
+
+  :root {
+    --ink: #1d2129;
+    --ink-soft: #5d6472;
+    --bg: #ffffff;
+    --bg-soft: #f2f2f5;      /* gray of the app's top row */
+    --line: #e4e5ea;
+    --badge: #ff453a;        /* red of the macOS Dock badge */
+    --acc-1: #0e7490;
+    --acc-2: #7c3aed;
+    --acc-3: #d97706;
+    --radius: 14px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 340;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 4px; }
+
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+
+  kbd {
+    font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+    font-size: 0.82em;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 6px;
+    padding: 2px 7px;
+    white-space: nowrap;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    padding: 20px 0;
+  }
+  header .wrap {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 560; font-size: 1.05rem; text-decoration: none; }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  .ghlink {
+    font-size: 0.92rem; color: var(--ink-soft); text-decoration: none;
+    border-bottom: 1px solid var(--line); padding-bottom: 1px;
+  }
+  .ghlink:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 56px 0 72px; }
+  .hero .wrap {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 460px);
+    gap: 56px; align-items: center;
+  }
+  .eyebrow {
+    font-size: 0.8rem; font-weight: 500; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-soft); margin-bottom: 18px;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 5.2vw, 3.3rem);
+    font-weight: 620; line-height: 1.08; letter-spacing: -0.022em;
+    margin-bottom: 20px; text-wrap: balance;
+  }
+  h1 .n {
+    display: inline-block; vertical-align: super;
+    font-size: 0.36em; font-weight: 600; line-height: 1;
+    background: var(--badge); color: #fff;
+    border-radius: 99px; padding: 4px 9px;
+  }
+  .hero p.sub { font-size: 1.08rem; color: var(--ink-soft); max-width: 46ch; margin-bottom: 32px; }
+  .cta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--ink); color: #fff; text-decoration: none;
+    font-weight: 480; font-size: 1rem;
+    padding: 14px 24px; border-radius: 12px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(29, 33, 41, 0.18); }
+  .btn svg { width: 19px; height: 19px; fill: currentColor; }
+  .cta .alt { font-size: 0.95rem; color: var(--ink-soft); text-decoration: none; border-bottom: 1px solid var(--line); padding-bottom: 1px; }
+  .cta .alt:hover { color: var(--ink); border-color: var(--ink); }
+  .fineprint { margin-top: 18px; font-size: 0.82rem; color: var(--ink-soft); }
+
+  /* ---------- mockup: the real GTray window ---------- */
+  .demo { display: flex; flex-direction: column; align-items: center; gap: 26px; }
+
+  .window {
+    width: 100%; max-width: 440px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 24px 60px -18px rgba(29, 33, 41, 0.25);
+    overflow: hidden;
+    user-select: none;
+  }
+  .titlebar {
+    height: 34px; background: var(--bg-soft);
+    display: flex; align-items: center; padding: 0 12px; gap: 7px;
+    border-bottom: 1px solid var(--line);
+  }
+  .light { width: 11px; height: 11px; border-radius: 50%; }
+  .light.r { background: #ff5f57; } .light.y { background: #febc2e; } .light.g { background: #28c840; }
+
+  .winbody { display: flex; height: 268px; }
+  .rail {
+    width: 56px; flex: none; background: #fff;
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 0; gap: 12px;
+  }
+  .acc { position: relative; width: 34px; height: 34px; flex: none; }
+  .acc .face {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 560; font-size: 0.9rem;
+    transition: box-shadow 0.25s ease;
+  }
+  .acc[data-a="0"] .face { background: var(--acc-1); }
+  .acc[data-a="1"] .face { background: var(--acc-2); }
+  .acc[data-a="2"] .face { background: var(--acc-3); }
+  .acc.active .face { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ink); }
+  .acc .count {
+    position: absolute; top: -5px; right: -7px;
+    min-width: 17px; height: 17px; padding: 0 4px;
+    background: var(--badge); color: #fff;
+    font-size: 0.66rem; font-weight: 600; line-height: 17px; text-align: center;
+    border-radius: 99px; border: 2px solid #fff;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+  }
+  .acc .count.zero { transform: scale(0); opacity: 0; }
+  .addacc {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 1.5px dashed var(--line); color: var(--ink-soft);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; font-weight: 300;
+  }
+
+  .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
+  .searchbar { padding: 12px 14px 8px; }
+  .pill { height: 26px; border-radius: 99px; background: #f0f3f8; }
+  .rows { flex: 1; padding: 4px 0; transition: opacity 0.3s ease; }
+  .rows.swap { opacity: 0; }
+  .row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px; border-top: 1px solid #f3f4f7;
+  }
+  .row .dot { width: 7px; height: 7px; border-radius: 50%; background: transparent; flex: none; }
+  .row.unread .dot { background: var(--badge); }
+  .row .from { width: 52px; height: 8px; border-radius: 4px; background: #dfe2e9; flex: none; }
+  .row.unread .from { background: #b9bec9; }
+  .row .subject { flex: 1; height: 8px; border-radius: 4px; background: #eceef3; }
+  .row.unread .subject { background: #d5d9e1; }
+
+  /* ---------- dock ---------- */
+  .dock {
+    display: flex; align-items: flex-end; gap: 14px;
+    padding: 10px 16px;
+    background: rgba(242, 242, 245, 0.85);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+  }
+  .dock .app { width: 44px; height: 44px; border-radius: 11px; background: linear-gradient(145deg, #e7e8ec, #d3d5db); }
+  .dock .gtray { position: relative; width: 52px; height: 52px; }
+  .dock .gtray img { width: 52px; height: 52px; border-radius: 13px; display: block; }
+  .dock .gtray .count {
+    position: absolute; top: -7px; right: -9px;
+    min-width: 21px; height: 21px; padding: 0 5px;
+    background: var(--badge); color: #fff;
+    font-size: 0.76rem; font-weight: 600; line-height: 21px; text-align: center;
+    border-radius: 99px; border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    transition: transform 0.25s ease, opacity 0.25s ease;
+  }
+  .dock .gtray .count.zero { transform: scale(0); opacity: 0; }
+  .dock-caption { font-size: 0.82rem; color: var(--ink-soft); text-align: center; }
+
+  /* ---------- sections ---------- */
+  section { padding: 64px 0; border-top: 1px solid var(--line); }
+  h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 600;
+    letter-spacing: -0.015em; margin-bottom: 28px; text-wrap: balance;
+  }
+
+  .feats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; }
+  .feat h3 { font-size: 1.02rem; font-weight: 560; margin-bottom: 8px; }
+  .feat p { font-size: 0.95rem; color: var(--ink-soft); }
+
+  .trust { background: var(--bg-soft); }
+  .trust .inner {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px;
+  }
+  .trust p.lead { font-size: 1.05rem; color: var(--ink-soft); max-width: 50ch; }
+  .trust ul { list-style: none; display: flex; flex-direction: column; gap: 18px; }
+  .trust li { padding-left: 30px; position: relative; font-size: 0.97rem; }
+  .trust li::before {
+    content: ''; position: absolute; left: 0; top: 5px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink);
+    -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="black" d="M6.5 12.2 2.8 8.5l1.4-1.4 2.3 2.3 5.3-5.3 1.4 1.4z"/></svg>') center / contain no-repeat;
+            mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="black" d="M6.5 12.2 2.8 8.5l1.4-1.4 2.3 2.3 5.3-5.3 1.4 1.4z"/></svg>') center / contain no-repeat;
+  }
+  .trust li strong { font-weight: 560; }
+  .trust .repo {
+    margin-top: 26px; display: inline-flex; align-items: center; gap: 8px;
+    font-size: 0.95rem; font-weight: 480; text-decoration: none;
+    border-bottom: 1.5px solid var(--ink); padding-bottom: 2px;
+  }
+  .trust .repo svg { width: 17px; height: 17px; fill: currentColor; }
+
+  .shortcuts { display: flex; gap: 14px 34px; flex-wrap: wrap; font-size: 0.97rem; color: var(--ink-soft); }
+  .shortcuts span { display: inline-flex; align-items: center; gap: 8px; }
+
+  footer { border-top: 1px solid var(--line); padding: 36px 0 48px; }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer p { font-size: 0.84rem; color: var(--ink-soft); max-width: 62ch; }
+  footer a { color: var(--ink-soft); }
+  footer a:hover { color: var(--ink); }
+
+  @media (max-width: 860px) {
+    .hero { padding: 32px 0 56px; }
+    .hero .wrap { grid-template-columns: 1fr; gap: 48px; }
+    .feats { grid-template-columns: 1fr; gap: 28px; }
+    .trust .inner { grid-template-columns: 1fr; gap: 28px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .btn, .acc .face, .acc .count, .rows, .dock .gtray .count { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="brand" href="/"><img src="icon.png" alt="" width="30" height="30"> GTray</a>
+    <a class="ghlink" href="https://github.com/MatiasSanchezCabrera/gtray">GitHub</a>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow">For macOS · Apple Silicon · Open source</p>
+        <h1>All your Gmail inboxes, in a single app <span class="n" id="hero-count" aria-hidden="true">11</span></h1>
+        <p class="sub">GTray brings your Gmail accounts into one window: the web
+        experience intact, every session isolated, and the unread count of all
+        your inboxes always visible in the Dock.</p>
+        <div class="cta">
+          <a class="btn" href="https://github.com/MatiasSanchezCabrera/gtray/releases/latest">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+            Download on GitHub
+          </a>
+          <a class="alt" href="https://github.com/MatiasSanchezCabrera/gtray">View the code</a>
+        </div>
+        <p class="fineprint">Free · GPL-3.0 · Every version is built and published
+        from GitHub Actions, with checksums.</p>
+      </div>
+
+      <div class="demo" aria-hidden="true">
+        <div class="window">
+          <div class="titlebar"><span class="light r"></span><span class="light y"></span><span class="light g"></span></div>
+          <div class="winbody">
+            <div class="rail">
+              <div class="acc active" data-a="0"><div class="face">M</div><span class="count">3</span></div>
+              <div class="acc" data-a="1"><div class="face">D</div><span class="count">7</span></div>
+              <div class="acc" data-a="2"><div class="face">A</div><span class="count">1</span></div>
+              <div class="addacc">+</div>
+            </div>
+            <div class="pane">
+              <div class="searchbar"><div class="pill"></div></div>
+              <div class="rows" id="rows">
+                <div class="row unread"><span class="dot"></span><span class="from"></span><span class="subject" style="width:82%"></span></div>
+                <div class="row unread"><span class="dot"></span><span class="from"></span><span class="subject" style="width:64%"></span></div>
+                <div class="row unread"><span class="dot"></span><span class="from"></span><span class="subject" style="width:74%"></span></div>
+                <div class="row"><span class="dot"></span><span class="from"></span><span class="subject" style="width:58%"></span></div>
+                <div class="row"><span class="dot"></span><span class="from"></span><span class="subject" style="width:70%"></span></div>
+                <div class="row"><span class="dot"></span><span class="from"></span><span class="subject" style="width:49%"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="dock">
+            <div class="app"></div>
+            <div class="gtray"><img src="icon.png" alt=""><span class="count" id="dock-count">11</span></div>
+            <div class="app"></div>
+          </div>
+          <p class="dock-caption" style="margin-top:10px">The Dock adds up the unread mail of all your accounts.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section>
+    <div class="wrap">
+      <h2>A browser dedicated to your mail, not another client to learn</h2>
+      <div class="feats">
+        <div class="feat">
+          <h3>The real Gmail</h3>
+          <p>No reimplemented email here: it's Gmail's web interface, with the
+          shortcuts, chat, and everything you already use. Links open in your
+          browser and Compose gets its own window.</p>
+        </div>
+        <div class="feat">
+          <h3>Each account, its own session</h3>
+          <p>Every inbox lives in an isolated profile: sign in once and it
+          sticks. Switch accounts instantly with
+          <kbd>⌘1</kbd>…<kbd>⌘9</kbd>, without logging out or mixing cookies.</p>
+        </div>
+        <div class="feat">
+          <h3>The number that matters</h3>
+          <p>The Dock badge adds up the unread mail of every inbox and updates
+          the moment you read or archive — even with the window closed.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="trust">
+    <div class="wrap inner">
+      <div>
+        <h2>An app that touches your Gmail deserves code you can read</h2>
+        <p class="lead">That's why GTray is open source and only downloadable
+        from GitHub Releases: every version comes from code anyone can audit,
+        built by GitHub Actions in plain sight.</p>
+        <a class="repo" href="https://github.com/MatiasSanchezCabrera/gtray">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+          MatiasSanchezCabrera/gtray
+        </a>
+      </div>
+      <ul>
+        <li><strong>Your sessions never leave your Mac.</strong> They are
+        stored locally, like in any browser. GTray has no servers and no
+        telemetry.</li>
+        <li><strong>Google never shares your password with GTray.</strong> The
+        login happens on Google's real page; the app asks for no OAuth and no
+        API permissions.</li>
+        <li><strong>Counters are read from Gmail's own feed</strong> with your
+        cookies, straight from Google to your Mac. Every request the app makes
+        goes to Google — nobody else.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Shortcuts</h2>
+      <div class="shortcuts">
+        <span><kbd>⌘1</kbd>…<kbd>⌘9</kbd> switch inbox</span>
+        <span><kbd>⌘N</kbd> add account</span>
+        <span><kbd>⌘R</kbd> reload</span>
+        <span><kbd>⌘Q</kbd> quit (closing the window keeps it counting in the background)</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>GTray is open source under <a href="https://github.com/MatiasSanchezCabrera/gtray/blob/main/LICENSE">GPL-3.0</a>.
+    Requires macOS 13 or later on Apple Silicon.</p>
+    <p>GTray is not affiliated with Google. Gmail is a trademark of Google LLC.</p>
+  </div>
+</footer>
+
+<script>
+  // Hero demo: cycles the active account, "reads" its mail, and the Dock
+  // (and the headline badge) recompute the total.
+  (function () {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    var INITIAL = [3, 7, 1];
+    var counts = INITIAL.slice();
+    var accs = Array.prototype.slice.call(document.querySelectorAll('.acc'));
+    var rows = document.getElementById('rows');
+    var dock = document.getElementById('dock-count');
+    var hero = document.getElementById('hero-count');
+    var active = 0;
+
+    function paint() {
+      accs.forEach(function (a, i) {
+        var c = a.querySelector('.count');
+        c.textContent = counts[i];
+        c.classList.toggle('zero', counts[i] === 0);
+      });
+      var total = counts.reduce(function (s, n) { return s + n; }, 0);
+      dock.textContent = total;
+      dock.classList.toggle('zero', total === 0);
+      hero.textContent = total;
+      hero.style.opacity = total === 0 ? '0.25' : '1';
+      var unread = rows.querySelectorAll('.row');
+      unread.forEach(function (r, i) {
+        r.classList.toggle('unread', i < Math.min(counts[active], unread.length));
+      });
+    }
+
+    function step() {
+      if (counts.every(function (n) { return n === 0; })) {
+        counts = INITIAL.slice();
+        active = accs.length - 1; // the next step starts at account 0
+      }
+      var next = (active + 1) % accs.length;
+      while (counts[next] === 0) next = (next + 1) % accs.length;
+      active = next;
+      accs.forEach(function (a, i) { a.classList.toggle('active', i === active); });
+      rows.classList.add('swap');
+      setTimeout(function () { rows.classList.remove('swap'); paint(); }, 300);
+      setTimeout(function () { counts[active] = 0; paint(); }, 1600);
+    }
+
+    paint();
+    setInterval(function () { if (!document.hidden) step(); }, 3200);
+  })();
+</script>
+
+</body>
+</html>
