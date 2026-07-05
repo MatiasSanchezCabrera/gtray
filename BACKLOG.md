@@ -7,6 +7,10 @@ priority until agreed. For architecture and how the app works, see `CLAUDE.md`.
 
 - **Improve the logo** — the current icon (envelope on a tray, raster) is fine,
   but it can be iterated on.
+- **Keep the Firefox UA version fresh** — the spoofed UA in `main.ts` ages as
+  real Firefox releases monthly. Meet rejects browsers older than
+  current-minus-two (Gmail is more tolerant). Bump it every few months, or
+  automate fetching the current version.
 - _(add whatever comes up here)_
 
 ## Done (summary)

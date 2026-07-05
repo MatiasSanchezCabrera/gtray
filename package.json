@@ -1,7 +1,7 @@
 {
   "name": "gtray",
   "productName": "GTray",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Minimal macOS Gmail wrapper: all your inboxes, the web experience intact",
   "author": "Matías Sánchez Cabrera",
   "private": true,
@@ -29,7 +29,9 @@
       "icon": "assets/icon.icns",
       "target": "dir",
       "extendInfo": {
-        "NSBluetoothAlwaysUsageDescription": "GTray uses Bluetooth for security keys when signing in to Google."
+        "NSBluetoothAlwaysUsageDescription": "GTray uses Bluetooth for security keys when signing in to Google.",
+        "NSCameraUsageDescription": "GTray needs camera access for Google Meet video calls.",
+        "NSMicrophoneUsageDescription": "GTray needs microphone access for Google Meet calls."
       }
     }
   },

@@ -9,6 +9,24 @@ export const TOP_BAR_HEIGHT = 52
 
 const GMAIL_URL = 'https://mail.google.com/mail/u/0/'
 
+// Meet refuses to start calls under the Firefox disguise (even with a current
+// version): Google can see server-side that the network fingerprint is
+// Chromium's, not Firefox's. Gmail tolerates the mismatch; Meet doesn't.
+// App windows (Calendar, Meet, Drive) never run a login flow — the session
+// cookies are already there — so they skip the disguise entirely and present
+// as the Chrome build they really are, matching the engine.
+const CHROME_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+  `Chrome/${process.versions.chrome.split('.')[0]}.0.0.0 Safari/537.36`
+
+function isMeetHost(url: string): boolean {
+  try {
+    return new URL(url).hostname === 'meet.google.com'
+  } catch {
+    return false
+  }
+}
+
 // Domains that are browsed inside the app (Gmail + Google's login flow).
 // Everything else opens in the default browser.
 function isGoogleHost(url: string): boolean {
@@ -55,8 +73,14 @@ function configureSession(ses: Session): void {
   })
 }
 
-export function wireGmailContents(wc: WebContents): void {
+export function wireGmailContents(wc: WebContents, chrome = false): void {
   wc.setWindowOpenHandler(({ url }) => {
+    // Meet links (from Gmail or Calendar) can't run under the Firefox
+    // disguise: give them a real-Chrome window instead of a regular popup
+    if (!chrome && isMeetHost(url)) {
+      openAppWindow(wc.session, url)
+      return { action: 'deny' }
+    }
     // Gmail popups (Compose, print) and login popups → own window
     if (url === 'about:blank' || isGoogleHost(url)) {
       return {
@@ -65,20 +89,26 @@ export function wireGmailContents(wc: WebContents): void {
           width: 1000,
           height: 720,
           title: 'GTray',
-          // Login popups need the Firefox disguise too
-          webPreferences: {
-            preload: GMAIL_PRELOAD,
-            contextIsolation: false,
-            nodeIntegration: false,
-            sandbox: false,
-          },
+          // Login popups need the Firefox disguise too; popups of Chrome
+          // windows keep Chromium's real fingerprints, like their parent
+          webPreferences: chrome
+            ? {}
+            : {
+                preload: GMAIL_PRELOAD,
+                contextIsolation: false,
+                nodeIntegration: false,
+                sandbox: false,
+              },
         },
       }
     }
     void shell.openExternal(url)
     return { action: 'deny' }
   })
-  wc.on('did-create-window', (child) => wireGmailContents(child.webContents))
+  wc.on('did-create-window', (child) => {
+    if (chrome) child.webContents.setUserAgent(CHROME_UA)
+    wireGmailContents(child.webContents, chrome)
+  })
   wc.on('will-navigate', (event, url) => {
     if (!isGoogleHost(url)) {
       event.preventDefault()
@@ -87,8 +117,27 @@ export function wireGmailContents(wc: WebContents): void {
   })
 }
 
+// Standalone window for a Google app, signed in via the account's session
+// cookies, presenting as real Chrome (no Firefox disguise, no fingerprint
+// hiding). See CHROME_UA above for why.
+export function openAppWindow(ses: Session, url: string): BrowserWindow {
+  configureSession(ses)
+  const win = new BrowserWindow({
+    width: 1100,
+    height: 760,
+    title: 'GTray',
+    webPreferences: { session: ses },
+  })
+  win.webContents.setUserAgent(CHROME_UA)
+  wireGmailContents(win.webContents, true)
+  void win.loadURL(url)
+  return win
+}
+
 export class ViewManager {
   private views = new Map<string, WebContentsView>()
+  // Calendar/Meet windows, one per account and app, keyed `<accountId>:<url>`
+  private appWindows = new Map<string, BrowserWindow>()
   private activeId: string | null = null
 
   constructor(private win: BrowserWindow) {
@@ -138,6 +187,22 @@ export class ViewManager {
     this.active()?.webContents.focus()
   }
 
+  // Opens a Google app (Calendar, Meet, Drive) in its own window, with the
+  // account's session so it lands already signed in. One window per account
+  // and app: clicking again focuses the existing one.
+  openApp(accountId: string, url: string): void {
+    const key = `${accountId}:${url}`
+    const existing = this.appWindows.get(key)
+    if (existing && !existing.isDestroyed()) {
+      existing.show()
+      existing.focus()
+      return
+    }
+    const win = openAppWindow(this.sessionFor(accountId), url)
+    win.on('closed', () => this.appWindows.delete(key))
+    this.appWindows.set(key, win)
+  }
+
   layout(): void {
     const view = this.active()
     if (!view) return
@@ -151,6 +216,9 @@ export class ViewManager {
   }
 
   destroy(id: string): void {
+    for (const [key, appWin] of this.appWindows) {
+      if (key.startsWith(`${id}:`) && !appWin.isDestroyed()) appWin.destroy()
+    }
     const view = this.views.get(id)
     if (!view) return
     this.win.contentView.removeChildView(view)

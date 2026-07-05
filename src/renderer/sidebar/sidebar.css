@@ -198,12 +198,50 @@ body {
   font-weight: 500;
 }
 
-/* Donation button: discreet, in the top-right corner of the gray row */
-#donate {
+/* Top-right corner of the gray row: app shortcuts + donation button */
+#topbar-actions {
   position: absolute;
   right: 12px;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Google app shortcuts (Calendar, Meet): open the app for the active account */
+.app-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.12s ease, background 0.12s ease;
+  -webkit-app-region: no-drag;
+}
+
+.app-btn:hover {
+  opacity: 1;
+  background: var(--sep);
+}
+
+.app-btn img {
+  height: 17px;
+  width: auto;
+  display: block;
+}
+
+.app-btn.hidden {
+  display: none;
+}
+
+/* Donation button: discreet, in the top-right corner of the gray row */
+#donate {
   padding: 6px 10px;
   border: none;
   border-radius: 8px;

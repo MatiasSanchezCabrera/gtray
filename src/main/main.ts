@@ -11,6 +11,12 @@ const COLORS = ['#1a73e8', '#188038', '#e8710a', '#9334e6', '#d93025', '#129eaf'
 const POLL_ESTABLISHED_MS = 60_000
 const POLL_PENDING_MS = 5_000 // freshly added account: detect the login quickly
 const DONATION_URL = 'https://ko-fi.com/matias_sanchez'
+// Google apps openable from the topbar, in the active account's session
+const APP_URLS: Record<string, string> = {
+  calendar: 'https://calendar.google.com/',
+  meet: 'https://meet.google.com/',
+  drive: 'https://drive.google.com/',
+}
 
 app.setName('GTray')
 
@@ -29,8 +35,10 @@ if (!fs.existsSync(newUserData) && fs.existsSync(oldUserData)) {
 // consistently across the whole app: Google doesn't demand those fingerprints
 // from Firefox and Gmail works fine. Global (non-dynamic) UA so the HTTP header
 // and navigator.userAgent always match, including in login popups.
+// Keep the version close to the real current Firefox: Meet (unlike Gmail)
+// refuses to start calls on browsers older than current-minus-two.
 app.userAgentFallback =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:140.0) Gecko/20100101 Firefox/140.0'
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:152.0) Gecko/20100101 Firefox/152.0'
 
 if (!app.requestSingleInstanceLock()) app.exit(0)
 
@@ -253,9 +261,18 @@ function buildMenu(): void {
           click: () => views?.active()?.webContents.reload(),
         },
         {
-          label: 'Account DevTools',
+          label: 'DevTools',
           accelerator: 'Alt+CmdOrCtrl+I',
-          click: () => views?.active()?.webContents.openDevTools({ mode: 'detach' }),
+          click: () => {
+            // App windows (Calendar, Meet, Drive) get their own devtools;
+            // in the main window it targets the active Gmail view
+            const focused = BrowserWindow.getFocusedWindow()
+            if (focused && focused !== win) {
+              focused.webContents.openDevTools({ mode: 'detach' })
+            } else {
+              views?.active()?.webContents.openDevTools({ mode: 'detach' })
+            }
+          },
         },
         { type: 'separator' },
         { role: 'togglefullscreen' },
@@ -325,6 +342,10 @@ void app.whenReady().then(() => {
   ipcMain.on('select-account', (_event, id: string) => selectAccount(id))
   ipcMain.on('add-account', () => addAccount())
   ipcMain.on('donate', () => void shell.openExternal(DONATION_URL))
+  ipcMain.on('open-app', (_event, appId: string) => {
+    const url = APP_URLS[appId]
+    if (url && config.activeAccountId) views?.openApp(config.activeAccountId, url)
+  })
   ipcMain.on('account-menu', (_event, id: string) => {
     if (!win) return
     Menu.buildFromTemplate([

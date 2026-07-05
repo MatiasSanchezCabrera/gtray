@@ -16,6 +16,7 @@ interface TrayApi {
   add: () => void
   accountMenu: (id: string) => void
   donate: () => void
+  openApp: (app: 'calendar' | 'meet' | 'drive') => void
 }
 
 declare global {
@@ -33,6 +34,13 @@ addEl.addEventListener('click', () => window.tray.add())
 
 const donateEl = document.getElementById('donate') as HTMLElement
 donateEl.addEventListener('click', () => window.tray.donate())
+
+const calendarEl = document.getElementById('open-calendar') as HTMLElement
+const meetEl = document.getElementById('open-meet') as HTMLElement
+const driveEl = document.getElementById('open-drive') as HTMLElement
+calendarEl.addEventListener('click', () => window.tray.openApp('calendar'))
+meetEl.addEventListener('click', () => window.tray.openApp('meet'))
+driveEl.addEventListener('click', () => window.tray.openApp('drive'))
 
 window.tray.onState((state) => {
   accountsEl.textContent = ''
@@ -77,6 +85,10 @@ window.tray.onState((state) => {
   const active = state.accounts.find((a) => a.active)
   titleEl.textContent = active ? (active.email ?? active.name) : ''
   emptyEl.style.display = state.accounts.length ? 'none' : 'flex'
+  // App shortcuts only make sense with an account to open them for
+  calendarEl.classList.toggle('hidden', !active)
+  meetEl.classList.toggle('hidden', !active)
+  driveEl.classList.toggle('hidden', !active)
 })
 
 export {}
