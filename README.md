@@ -1,5 +1,9 @@
 # GTray
 
+[![Downloads](https://img.shields.io/github/downloads/MatiasSanchezCabrera/gtray/total?label=downloads)](https://github.com/MatiasSanchezCabrera/gtray/releases)
+[![Latest release](https://img.shields.io/github/v/release/MatiasSanchezCabrera/gtray?label=latest)](https://github.com/MatiasSanchezCabrera/gtray/releases/latest)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](./LICENSE)
+
 All your Gmail inboxes in a single macOS app, with the web experience intact
 and your unread count always visible in the Dock.
 
