@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld('tray', {
   accountMenu: (id: string) => ipcRenderer.send('account-menu', id),
   donate: () => ipcRenderer.send('donate'),
   openApp: (app: string) => ipcRenderer.send('open-app', app),
+  updateDownload: () => ipcRenderer.send('update-download'),
+  updateDismiss: () => ipcRenderer.send('update-dismiss'),
 })

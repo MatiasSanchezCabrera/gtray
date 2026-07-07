@@ -21,12 +21,16 @@ export interface ConfigData {
   accounts: Account[]
   activeAccountId: string | null
   windowState: WindowState
+  updateCheck: boolean // daily version check against gtray.app
+  dismissedUpdateVersion: string | null // "Update available" closed for this version
 }
 
 const DEFAULTS: ConfigData = {
   accounts: [],
   activeAccountId: null,
   windowState: { width: 1280, height: 860 },
+  updateCheck: true,
+  dismissedUpdateVersion: null,
 }
 
 function configPath(): string {

@@ -4,12 +4,14 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { Account, ConfigData, loadConfig, saveConfig } from './config'
 import { fetchUnread } from './polling'
+import { DMG_URL, fetchLatestVersion, isNewer } from './updates'
 import { ViewManager } from './views'
 import { updateBadges } from './badges'
 
 const COLORS = ['#1a73e8', '#188038', '#e8710a', '#9334e6', '#d93025', '#129eaf']
 const POLL_ESTABLISHED_MS = 60_000
 const POLL_PENDING_MS = 5_000 // freshly added account: detect the login quickly
+const UPDATE_CHECK_MS = 24 * 60 * 60 * 1000 // daily
 const DONATION_URL = 'https://ko-fi.com/matias_sanchez'
 // Google apps openable from the topbar, in the active account's session
 const APP_URLS: Record<string, string> = {
@@ -47,6 +49,7 @@ let win: BrowserWindow | null = null
 let views: ViewManager | null = null
 let quitting = false
 let menuSignature: string | null = null
+let availableUpdate: string | null = null // latest version, when newer than ours
 const status = new Map<string, { unread: number; authError: boolean; lastPoll: number }>()
 
 function snapshot() {
@@ -68,7 +71,11 @@ function snapshot() {
 
 function pushState(): void {
   const accounts = snapshot()
-  win?.webContents.send('state', { accounts })
+  const update =
+    availableUpdate && availableUpdate !== config.dismissedUpdateVersion
+      ? { version: availableUpdate }
+      : null
+  win?.webContents.send('state', { accounts, update })
   updateBadges(
     accounts.map((a) => ({
       id: a.id,
@@ -225,6 +232,52 @@ async function pollTick(force = false): Promise<void> {
   if (results.some(Boolean)) pushState()
 }
 
+// Automatic check: silent — on a hit it lights up the sidebar pill via pushState.
+async function checkForUpdates(): Promise<void> {
+  const latest = await fetchLatestVersion()
+  if (latest && isNewer(latest, app.getVersion())) {
+    if (availableUpdate !== latest) {
+      availableUpdate = latest
+      pushState()
+    }
+  }
+}
+
+// Manual check (menu): always reports the result in a dialog, even when
+// up to date, and ignores any dismissed pill.
+async function checkForUpdatesInteractive(): Promise<void> {
+  const latest = await fetchLatestVersion()
+  if (!latest) {
+    dialog.showMessageBox({
+      type: 'warning',
+      message: 'Could not check for updates',
+      detail: 'gtray.app is unreachable. Check your connection and try again.',
+    })
+    return
+  }
+  if (!isNewer(latest, app.getVersion())) {
+    dialog.showMessageBox({
+      type: 'info',
+      message: "You're up to date",
+      detail: `GTray ${app.getVersion()} is the latest version.`,
+    })
+    return
+  }
+  availableUpdate = latest
+  config.dismissedUpdateVersion = null // a manual check un-dismisses the pill
+  saveConfig(config)
+  pushState()
+  const { response } = await dialog.showMessageBox({
+    type: 'info',
+    message: `GTray ${latest} is available`,
+    detail: `You have ${app.getVersion()}. The download replaces the app in /Applications; your accounts and sessions are kept.`,
+    buttons: ['Download', 'Later'],
+    defaultId: 0,
+    cancelId: 1,
+  })
+  if (response === 0) void shell.openExternal(DMG_URL)
+}
+
 function buildMenu(): void {
   const accountItems: MenuItemConstructorOptions[] = config.accounts.slice(0, 9).map((a, i) => ({
     label: a.email ?? a.name,
@@ -235,7 +288,36 @@ function buildMenu(): void {
     },
   }))
   const template: MenuItemConstructorOptions[] = [
-    { role: 'appMenu' },
+    {
+      // Custom app menu: the default one (role: 'appMenu') can't host the
+      // update entries
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        {
+          label: 'Check for Updates…',
+          click: () => void checkForUpdatesInteractive(),
+        },
+        {
+          label: 'Check for Updates Automatically',
+          type: 'checkbox',
+          checked: config.updateCheck,
+          click: (item) => {
+            config.updateCheck = item.checked
+            saveConfig(config)
+          },
+        },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
     {
       label: 'File',
       submenu: [
@@ -346,6 +428,12 @@ void app.whenReady().then(() => {
     const url = APP_URLS[appId]
     if (url && config.activeAccountId) views?.openApp(config.activeAccountId, url)
   })
+  ipcMain.on('update-download', () => void shell.openExternal(DMG_URL))
+  ipcMain.on('update-dismiss', () => {
+    config.dismissedUpdateVersion = availableUpdate
+    saveConfig(config)
+    pushState()
+  })
   ipcMain.on('account-menu', (_event, id: string) => {
     if (!win) return
     Menu.buildFromTemplate([
@@ -360,6 +448,15 @@ void app.whenReady().then(() => {
 
   setInterval(() => void pollTick(), POLL_PENDING_MS)
   void pollTick(true)
+
+  // Daily update check (a few seconds after launch so startup stays snappy).
+  // The toggle is read at fire time, so changing it needs no rescheduling.
+  setTimeout(() => {
+    if (config.updateCheck) void checkForUpdates()
+  }, 10_000)
+  setInterval(() => {
+    if (config.updateCheck) void checkForUpdates()
+  }, UPDATE_CHECK_MS)
 
   if (process.argv.includes('--smoke')) {
     setTimeout(() => {

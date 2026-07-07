@@ -240,6 +240,44 @@ body {
   display: none;
 }
 
+/* Update pill: only rendered when a newer version exists; ✕ dismisses it
+   until the next version (see dismissedUpdateVersion in main) */
+#update {
+  display: flex;
+  align-items: center;
+  background: #1a73e8;
+  border-radius: 8px;
+  -webkit-app-region: no-drag;
+}
+
+#update.hidden {
+  display: none;
+}
+
+#update button {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#update-go {
+  padding: 6px 2px 6px 10px;
+}
+
+#update-close {
+  padding: 6px 8px 6px 6px;
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+#update-close:hover {
+  opacity: 1;
+}
+
 /* Donation button: discreet, in the top-right corner of the gray row */
 #donate {
   padding: 6px 10px;

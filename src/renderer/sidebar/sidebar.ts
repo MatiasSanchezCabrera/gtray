@@ -11,12 +11,16 @@ interface AccountState {
 }
 
 interface TrayApi {
-  onState: (callback: (state: { accounts: AccountState[] }) => void) => void
+  onState: (
+    callback: (state: { accounts: AccountState[]; update: { version: string } | null }) => void,
+  ) => void
   select: (id: string) => void
   add: () => void
   accountMenu: (id: string) => void
   donate: () => void
   openApp: (app: 'calendar' | 'meet' | 'drive') => void
+  updateDownload: () => void
+  updateDismiss: () => void
 }
 
 declare global {
@@ -42,7 +46,19 @@ calendarEl.addEventListener('click', () => window.tray.openApp('calendar'))
 meetEl.addEventListener('click', () => window.tray.openApp('meet'))
 driveEl.addEventListener('click', () => window.tray.openApp('drive'))
 
+const updateEl = document.getElementById('update') as HTMLElement
+const updateGoEl = document.getElementById('update-go') as HTMLElement
+const updateCloseEl = document.getElementById('update-close') as HTMLElement
+updateGoEl.addEventListener('click', () => window.tray.updateDownload())
+updateCloseEl.addEventListener('click', () => window.tray.updateDismiss())
+
 window.tray.onState((state) => {
+  updateEl.classList.toggle('hidden', !state.update)
+  if (state.update) {
+    updateGoEl.textContent = `Update to ${state.update.version}`
+    updateGoEl.title = `GTray ${state.update.version} is available — download the new version`
+  }
+
   accountsEl.textContent = ''
   for (const account of state.accounts) {
     const button = document.createElement('button')

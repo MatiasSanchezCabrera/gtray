@@ -40,7 +40,9 @@ GitHub Actions from this code, with published checksums):
   (`mail.google.com/mail/feed/atom`) with your own cookies. GTray never sees
   your password: the login happens on Google's real page.
 - **Auditable.** All the code is in this repo, and every request the app makes
-  goes to Google — nobody else.
+  goes to Google — with one exception you control: a daily update check
+  fetches `gtray.app/version.json` (a plain GET, no identifiers, no cookies).
+  Turn it off in **GTray → Check for Updates Automatically**.
 
 ## Features
 

@@ -68,3 +68,17 @@ jobs:
           gh release create "$GITHUB_REF_NAME" release/*.dmg release/checksums.txt \
             --title "GTray $GITHUB_REF_NAME" \
             --generate-notes
+
+      # The in-app update check reads gtray.app/version.json; committing it to
+      # main under landing/ triggers the Pages deploy that publishes it.
+      - name: Publish version.json for the in-app update check
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          printf '{ "version": "%s" }\n' "$VERSION" > landing/version.json
+          git add landing/version.json
+          git commit -m "Point version.json at $VERSION for the update check"
+          git push origin main
