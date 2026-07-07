@@ -111,6 +111,12 @@ landing/                  gtray.app website (static HTML/CSS/JS, no build step)
   If the app icon or font ever changes, re-copy them by hand or the website
   drifts out of sync.
 
+- **Landing is bilingual:** `landing/es/index.html` (gtray.app/es) is a
+  translated copy of `landing/index.html` — same markup/CSS, texts in neutral
+  Latin American Spanish. Any copy or design change to one page must be
+  replicated in the other. Both declare `hreflang` and link to each other from
+  the header.
+
 ## Conventions
 
 - **Everything in English**: code comments, commit messages, UI copy and docs.
