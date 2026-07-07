@@ -11,6 +11,14 @@ priority until agreed. For architecture and how the app works, see `CLAUDE.md`.
   real Firefox releases monthly. Meet rejects browsers older than
   current-minus-two (Gmail is more tolerant). Bump it every few months, or
   automate fetching the current version.
+- **Intel build (only if someone asks)** — Electron/electron-builder can
+  cross-build x64 from the arm64 runner (`--arm64 --x64`, or `--universal`
+  for a single fat dmg at ~2x size; the `${arch}` artifactName already
+  handles naming). Real cost is support: no Intel hardware to test on
+  (Rosetta 2 covers smoke tests only) and notarization runs twice. Intel
+  Macs are 2020-and-older and macOS Tahoe (26) is their last major version,
+  so don't build this preemptively. If requested, prefer the universal
+  binary + single download button.
 - _(add whatever comes up here)_
 
 ## Done (summary)
