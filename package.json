@@ -28,6 +28,7 @@
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icns",
       "target": "dir",
+      "artifactName": "GTray-${arch}.${ext}",
       "extendInfo": {
         "NSBluetoothAlwaysUsageDescription": "GTray uses Bluetooth for security keys when signing in to Google.",
         "NSCameraUsageDescription": "GTray needs camera access for Google Meet video calls.",
