@@ -19,6 +19,11 @@ priority until agreed. For architecture and how the app works, see `CLAUDE.md`.
   Macs are 2020-and-older and macOS Tahoe (26) is their last major version,
   so don't build this preemptively. If requested, prefer the universal
   binary + single download button.
+- **Per-account tabs (parked experiment)** — Calendar/Meet/Drive as tabs
+  inside the main window instead of separate windows, with a pill strip in
+  the topbar scoped to the active account. Working prototype in the
+  `experiment/account-tabs` branch; the user wasn't sold on it yet. Known
+  loose end noted in the branch's commit message.
 - _(add whatever comes up here)_
 
 ## Done (summary)
