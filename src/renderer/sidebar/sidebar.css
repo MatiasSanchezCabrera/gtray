@@ -192,10 +192,65 @@ body {
   -webkit-app-region: drag;
 }
 
-#topbar span {
+/* Tab strip of the active account. With only the inbox open it renders as
+   plain text (like the old title); app tabs turn it into pills. */
+#tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 60%;
+  overflow: hidden;
+}
+
+#tabs .title {
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
+  white-space: nowrap;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 99px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.tab:hover {
+  color: var(--muted-strong);
+}
+
+.tab.active {
+  background: var(--sidebar-bg);
+  border-color: var(--sep);
+  color: var(--muted-strong);
+}
+
+.tab img {
+  height: 13px;
+  width: auto;
+  display: block;
+}
+
+.tab .close {
+  margin: -2px -4px -2px 0;
+  padding: 2px 3px;
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.tab .close:hover {
+  opacity: 1;
 }
 
 /* Top-right corner of the gray row: app shortcuts + donation button */

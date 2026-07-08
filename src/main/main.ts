@@ -5,7 +5,7 @@ import * as path from 'path'
 import { Account, ConfigData, loadConfig, saveConfig } from './config'
 import { fetchUnread } from './polling'
 import { DMG_URL, fetchLatestVersion, isNewer } from './updates'
-import { ViewManager } from './views'
+import { TabId, ViewManager } from './views'
 import { updateBadges } from './badges'
 
 const COLORS = ['#1a73e8', '#188038', '#e8710a', '#9334e6', '#d93025', '#129eaf']
@@ -13,8 +13,8 @@ const POLL_ESTABLISHED_MS = 60_000
 const POLL_PENDING_MS = 5_000 // freshly added account: detect the login quickly
 const UPDATE_CHECK_MS = 24 * 60 * 60 * 1000 // daily
 const DONATION_URL = 'https://ko-fi.com/matias_sanchez'
-// Google apps openable from the topbar, in the active account's session
-const APP_URLS: Record<string, string> = {
+// Google apps openable from the topbar as tabs of the active account
+const APP_URLS: Partial<Record<TabId, string>> = {
   calendar: 'https://calendar.google.com/',
   meet: 'https://meet.google.com/',
   drive: 'https://drive.google.com/',
@@ -75,7 +75,13 @@ function pushState(): void {
     availableUpdate && availableUpdate !== config.dismissedUpdateVersion
       ? { version: availableUpdate }
       : null
-  win?.webContents.send('state', { accounts, update })
+  // Tabs of the active account only: switching accounts switches the strip
+  const activeId = config.activeAccountId
+  const tabs =
+    activeId && views
+      ? { open: views.openTabs(activeId), active: views.activeTabOf(activeId) }
+      : null
+  win?.webContents.send('state', { accounts, update, tabs })
   updateBadges(
     accounts.map((a) => ({
       id: a.id,
@@ -424,9 +430,22 @@ void app.whenReady().then(() => {
   ipcMain.on('select-account', (_event, id: string) => selectAccount(id))
   ipcMain.on('add-account', () => addAccount())
   ipcMain.on('donate', () => void shell.openExternal(DONATION_URL))
-  ipcMain.on('open-app', (_event, appId: string) => {
+  ipcMain.on('open-app', (_event, appId: TabId) => {
     const url = APP_URLS[appId]
-    if (url && config.activeAccountId) views?.openApp(config.activeAccountId, url)
+    if (url && config.activeAccountId) {
+      views?.openTab(config.activeAccountId, appId, url)
+      pushState()
+    }
+  })
+  ipcMain.on('select-tab', (_event, tab: TabId) => {
+    if (!config.activeAccountId) return
+    views?.selectTab(config.activeAccountId, tab)
+    pushState()
+  })
+  ipcMain.on('close-tab', (_event, tab: TabId) => {
+    if (!config.activeAccountId) return
+    views?.closeTab(config.activeAccountId, tab)
+    pushState()
   })
   ipcMain.on('update-download', () => void shell.openExternal(DMG_URL))
   ipcMain.on('update-dismiss', () => {

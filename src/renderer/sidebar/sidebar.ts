@@ -10,15 +10,23 @@ interface AccountState {
   pending: boolean
 }
 
+type TabId = 'gmail' | 'calendar' | 'meet' | 'drive'
+
+interface State {
+  accounts: AccountState[]
+  update: { version: string } | null
+  tabs: { open: TabId[]; active: TabId } | null
+}
+
 interface TrayApi {
-  onState: (
-    callback: (state: { accounts: AccountState[]; update: { version: string } | null }) => void,
-  ) => void
+  onState: (callback: (state: State) => void) => void
   select: (id: string) => void
   add: () => void
   accountMenu: (id: string) => void
   donate: () => void
   openApp: (app: 'calendar' | 'meet' | 'drive') => void
+  selectTab: (tab: TabId) => void
+  closeTab: (tab: TabId) => void
   updateDownload: () => void
   updateDismiss: () => void
 }
@@ -30,7 +38,7 @@ declare global {
 }
 
 const accountsEl = document.getElementById('accounts') as HTMLElement
-const titleEl = document.getElementById('active-title') as HTMLElement
+const tabsEl = document.getElementById('tabs') as HTMLElement
 const emptyEl = document.getElementById('empty-state') as HTMLElement
 const addEl = document.getElementById('add') as HTMLElement
 
@@ -99,12 +107,58 @@ window.tray.onState((state) => {
   }
 
   const active = state.accounts.find((a) => a.active)
-  titleEl.textContent = active ? (active.email ?? active.name) : ''
+  renderTabs(active ? (active.email ?? active.name) : '', state.tabs)
   emptyEl.style.display = state.accounts.length ? 'none' : 'flex'
   // App shortcuts only make sense with an account to open them for
   calendarEl.classList.toggle('hidden', !active)
   meetEl.classList.toggle('hidden', !active)
   driveEl.classList.toggle('hidden', !active)
 })
+
+const TAB_LABELS: Record<TabId, string> = {
+  gmail: 'Gmail',
+  calendar: 'Calendar',
+  meet: 'Meet',
+  drive: 'Drive',
+}
+
+function renderTabs(accountTitle: string, tabs: State['tabs']): void {
+  tabsEl.textContent = ''
+  // Only the inbox open: plain account title, like before tabs existed
+  if (!tabs || tabs.open.length <= 1) {
+    const title = document.createElement('span')
+    title.className = 'title'
+    title.textContent = accountTitle
+    tabsEl.appendChild(title)
+    return
+  }
+  for (const tab of tabs.open) {
+    const button = document.createElement('button')
+    button.className = 'tab' + (tab === tabs.active ? ' active' : '')
+    if (tab !== 'gmail') {
+      const icon = document.createElement('img')
+      icon.src = `${tab}.svg`
+      icon.alt = ''
+      button.appendChild(icon)
+    }
+    button.appendChild(
+      document.createTextNode(tab === 'gmail' ? accountTitle : TAB_LABELS[tab]),
+    )
+    button.title = TAB_LABELS[tab]
+    button.addEventListener('click', () => window.tray.selectTab(tab))
+    if (tab !== 'gmail') {
+      const close = document.createElement('span')
+      close.className = 'close'
+      close.textContent = '✕'
+      close.title = `Close ${TAB_LABELS[tab]}`
+      close.addEventListener('click', (event) => {
+        event.stopPropagation()
+        window.tray.closeTab(tab)
+      })
+      button.appendChild(close)
+    }
+    tabsEl.appendChild(button)
+  }
+}
 
 export {}

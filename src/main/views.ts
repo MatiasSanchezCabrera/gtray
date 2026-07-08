@@ -134,10 +134,13 @@ export function openAppWindow(ses: Session, url: string): BrowserWindow {
   return win
 }
 
+export type TabId = 'gmail' | 'calendar' | 'meet' | 'drive'
+
 export class ViewManager {
-  private views = new Map<string, WebContentsView>()
-  // Calendar/Meet windows, one per account and app, keyed `<accountId>:<url>`
-  private appWindows = new Map<string, BrowserWindow>()
+  // Per account: its open tabs. 'gmail' always exists; app tabs are created
+  // on demand and closable. Tabs are ephemeral (not persisted across runs).
+  private tabs = new Map<string, Map<TabId, WebContentsView>>()
+  private activeTab = new Map<string, TabId>()
   private activeId: string | null = null
 
   constructor(private win: BrowserWindow) {
@@ -168,39 +171,82 @@ export class ViewManager {
     void view.webContents.loadURL(GMAIL_URL)
     view.setVisible(false)
     this.win.contentView.addChildView(view)
-    this.views.set(id, view)
+    this.tabs.set(id, new Map([['gmail', view]]))
+    this.activeTab.set(id, 'gmail')
     return view
   }
 
   get(id: string): WebContentsView | undefined {
-    return this.views.get(id)
+    return this.tabs.get(id)?.get('gmail')
   }
 
+  // The visible view: the active account's active tab
   active(): WebContentsView | undefined {
-    return this.activeId ? this.views.get(this.activeId) : undefined
+    if (!this.activeId) return undefined
+    const tab = this.activeTab.get(this.activeId) ?? 'gmail'
+    return this.tabs.get(this.activeId)?.get(tab)
+  }
+
+  openTabs(id: string): TabId[] {
+    return Array.from(this.tabs.get(id)?.keys() ?? [])
+  }
+
+  activeTabOf(id: string): TabId {
+    return this.activeTab.get(id) ?? 'gmail'
   }
 
   setActive(id: string | null): void {
     this.activeId = id
-    for (const [viewId, view] of this.views) view.setVisible(viewId === id)
-    this.layout()
-    this.active()?.webContents.focus()
+    this.refreshVisibility()
   }
 
-  // Opens a Google app (Calendar, Meet, Drive) in its own window, with the
-  // account's session so it lands already signed in. One window per account
-  // and app: clicking again focuses the existing one.
-  openApp(accountId: string, url: string): void {
-    const key = `${accountId}:${url}`
-    const existing = this.appWindows.get(key)
-    if (existing && !existing.isDestroyed()) {
-      existing.show()
-      existing.focus()
-      return
+  // Opens a Google app (Calendar, Meet, Drive) as a tab of the account,
+  // presenting as real Chrome (no Firefox disguise — Meet refuses to start
+  // calls under it, see CHROME_UA). Reselects the tab if it is already open.
+  openTab(accountId: string, tab: TabId, url: string): void {
+    const accountTabs = this.tabs.get(accountId)
+    if (!accountTabs) return
+    if (!accountTabs.has(tab)) {
+      const view = new WebContentsView({
+        webPreferences: { session: this.sessionFor(accountId) },
+      })
+      view.webContents.setUserAgent(CHROME_UA)
+      wireGmailContents(view.webContents, true)
+      void view.webContents.loadURL(url)
+      view.setVisible(false)
+      this.win.contentView.addChildView(view)
+      accountTabs.set(tab, view)
     }
-    const win = openAppWindow(this.sessionFor(accountId), url)
-    win.on('closed', () => this.appWindows.delete(key))
-    this.appWindows.set(key, win)
+    this.activeTab.set(accountId, tab)
+    this.refreshVisibility()
+  }
+
+  selectTab(accountId: string, tab: TabId): void {
+    if (!this.tabs.get(accountId)?.has(tab)) return
+    this.activeTab.set(accountId, tab)
+    this.refreshVisibility()
+  }
+
+  // Closing a tab destroys its view (a Meet tab hangs up, like a browser tab)
+  closeTab(accountId: string, tab: TabId): void {
+    if (tab === 'gmail') return // the inbox is not closable
+    const accountTabs = this.tabs.get(accountId)
+    const view = accountTabs?.get(tab)
+    if (!accountTabs || !view) return
+    this.win.contentView.removeChildView(view)
+    view.webContents.close()
+    accountTabs.delete(tab)
+    if (this.activeTab.get(accountId) === tab) this.activeTab.set(accountId, 'gmail')
+    this.refreshVisibility()
+  }
+
+  private refreshVisibility(): void {
+    for (const [accountId, accountTabs] of this.tabs) {
+      const visibleTab = accountId === this.activeId ? this.activeTab.get(accountId) : null
+      for (const [tabId, view] of accountTabs) view.setVisible(tabId === visibleTab)
+    }
+    this.layout()
+    this.active()?.webContents.focus()
   }
 
   layout(): void {
@@ -216,14 +262,14 @@ export class ViewManager {
   }
 
   destroy(id: string): void {
-    for (const [key, appWin] of this.appWindows) {
-      if (key.startsWith(`${id}:`) && !appWin.isDestroyed()) appWin.destroy()
+    const accountTabs = this.tabs.get(id)
+    if (!accountTabs) return
+    for (const view of accountTabs.values()) {
+      this.win.contentView.removeChildView(view)
+      view.webContents.close()
     }
-    const view = this.views.get(id)
-    if (!view) return
-    this.win.contentView.removeChildView(view)
-    view.webContents.close()
-    this.views.delete(id)
+    this.tabs.delete(id)
+    this.activeTab.delete(id)
     if (this.activeId === id) this.activeId = null
   }
 }
