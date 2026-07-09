@@ -1,7 +1,7 @@
 {
   "name": "gtray",
   "productName": "GTray",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Minimal macOS Gmail wrapper: all your inboxes, the web experience intact",
   "author": "Matías Sánchez Cabrera",
   "private": true,
