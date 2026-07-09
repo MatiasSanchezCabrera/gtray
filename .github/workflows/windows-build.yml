@@ -1,0 +1,35 @@
+# Experimental Windows build: produces an unsigned NSIS installer (.exe) as a
+# workflow artifact. Lives on the windows-installer branch; not part of the
+# release pipeline (no publishing, no signing — SmartScreen will warn).
+name: Windows build
+
+on:
+  push:
+    branches: [windows-installer]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run build
+
+      - name: Package NSIS installer
+        run: npx electron-builder --win nsis --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GTray-windows-x64
+          path: release/GTray-x64.exe
+          if-no-files-found: error

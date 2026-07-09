@@ -19,8 +19,11 @@ function hide(): void {
   def(Navigator.prototype, 'vendor', () => '')
   // navigator.productSub: "20030107" in Chromium, "20100101" in Firefox
   def(Navigator.prototype, 'productSub', () => '20100101')
-  // navigator.oscpu: Firefox-only; its absence under a Firefox UA gives us away
-  def(Navigator.prototype, 'oscpu', () => 'Intel Mac OS X 10.15')
+  // navigator.oscpu: Firefox-only; its absence under a Firefox UA gives us
+  // away. Must match the UA's platform token (see main.ts).
+  const oscpu =
+    process.platform === 'win32' ? 'Windows NT 10.0; Win64; x64' : 'Intel Mac OS X 10.15'
+  def(Navigator.prototype, 'oscpu', () => oscpu)
   // navigator.buildID: Firefox exposes a fixed value for privacy
   def(Navigator.prototype, 'buildID', () => '20181001000000')
   // navigator.webdriver: must be false (Firefox and regular Chrome)

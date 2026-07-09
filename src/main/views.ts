@@ -26,8 +26,10 @@ const GMAIL_URL = 'https://mail.google.com/mail/u/0/'
 // App windows (Calendar, Meet, Drive) never run a login flow — the session
 // cookies are already there — so they skip the disguise entirely and present
 // as the Chrome build they really are, matching the engine.
+const CHROME_PLATFORM =
+  process.platform === 'win32' ? 'Windows NT 10.0; Win64; x64' : 'Macintosh; Intel Mac OS X 10_15_7'
 const CHROME_UA =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+  `Mozilla/5.0 (${CHROME_PLATFORM}) AppleWebKit/537.36 (KHTML, like Gecko) ` +
   `Chrome/${process.versions.chrome.split('.')[0]}.0.0.0 Safari/537.36`
 
 function isMeetHost(url: string): boolean {

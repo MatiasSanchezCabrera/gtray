@@ -60,8 +60,13 @@ if (!fs.existsSync(newUserData) && fs.existsSync(oldUserData)) {
 // and navigator.userAgent always match, including in login popups.
 // Keep the version close to the real current Firefox: Meet (unlike Gmail)
 // refuses to start calls on browsers older than current-minus-two.
-app.userAgentFallback =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:152.0) Gecko/20100101 Firefox/152.0'
+// The platform token must match the real OS: a Mac UA on Windows (or vice
+// versa) is exactly the kind of inconsistency the disguise exists to avoid.
+const FIREFOX_PLATFORM =
+  process.platform === 'win32'
+    ? 'Windows NT 10.0; Win64; x64'
+    : 'Macintosh; Intel Mac OS X 10.15'
+app.userAgentFallback = `Mozilla/5.0 (${FIREFOX_PLATFORM}; rv:152.0) Gecko/20100101 Firefox/152.0`
 
 if (!app.requestSingleInstanceLock()) app.exit(0)
 
@@ -840,9 +845,12 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     title: 'GTray',
-    titleBarStyle: 'hiddenInset',
-    // Traffic lights placed inside the top row (52px tall)
-    trafficLightPosition: { x: 18, y: 18 },
+    // macOS: frameless with the traffic lights inside the 52px top row.
+    // Windows/Linux: standard OS frame (title bar above our gray row) —
+    // simple and overlap-free until the layout is designed for them.
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 18, y: 18 } }
+      : {}),
     backgroundColor: '#ffffff',
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   })

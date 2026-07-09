@@ -3,8 +3,11 @@
 // identifiers, no cookies — see the disclosure in the README. The user can
 // turn the automatic check off from the app menu.
 
+// Stable latest-release asset for the running platform
 export const DMG_URL =
-  'https://github.com/MatiasSanchezCabrera/gtray/releases/latest/download/GTray-arm64.dmg'
+  process.platform === 'win32'
+    ? 'https://github.com/MatiasSanchezCabrera/gtray/releases/latest/download/GTray-x64.exe'
+    : 'https://github.com/MatiasSanchezCabrera/gtray/releases/latest/download/GTray-arm64.dmg'
 export const RELEASE_URL = 'https://github.com/MatiasSanchezCabrera/gtray/releases/latest'
 
 // Overridable so the check can be tested against a local server in development
