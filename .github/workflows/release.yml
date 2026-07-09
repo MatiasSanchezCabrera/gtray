@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: write
+  actions: write # to dispatch the Pages deploy after committing version.json
 
 jobs:
   release:
@@ -82,3 +83,6 @@ jobs:
           git add landing/version.json
           git commit -m "Point version.json at $VERSION for the update check"
           git push origin main
+          # Pushes made with GITHUB_TOKEN don't trigger other workflows
+          # (anti-recursion), so the Pages deploy must be dispatched explicitly
+          gh workflow run pages.yml --ref main
