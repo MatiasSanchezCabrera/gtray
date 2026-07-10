@@ -1,9 +1,9 @@
 {
   "name": "gtray",
   "productName": "GTray",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Minimal macOS Gmail wrapper: all your inboxes, the web experience intact",
-  "author": "Matías Sánchez Cabrera",
+  "author": "Mat\u00edas S\u00e1nchez Cabrera",
   "private": true,
   "main": "dist/main/main.js",
   "scripts": {
@@ -13,7 +13,7 @@
     "dist": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac"
   },
   "build": {
-    "appId": "com.docutray.gtray",
+    "appId": "app.gtray.mac",
     "productName": "GTray",
     "directories": {
       "output": "release"
