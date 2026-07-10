@@ -73,6 +73,8 @@ jobs:
       # The in-app update check reads gtray.app/version.json; committing it to
       # main under landing/ triggers the Pages deploy that publishes it.
       - name: Publish version.json for the in-app update check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           git config user.name "github-actions[bot]"
