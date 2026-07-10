@@ -1,0 +1,128 @@
+<!doctype html>
+<!-- Spanish version of ../privacy.html — keep in sync. The update-check
+     description must stay consistent with the README. -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de Privacidad — GTray</title>
+<meta name="description" content="Política de privacidad de GTray: la app no recolecta datos. Sin servidores, sin telemetría, sin analytics, sin cuentas.">
+<link rel="canonical" href="https://gtray.app/es/privacy">
+<link rel="alternate" hreflang="en" href="https://gtray.app/privacy">
+<link rel="alternate" hreflang="es" href="https://gtray.app/es/privacy">
+<link rel="alternate" hreflang="x-default" href="https://gtray.app/privacy">
+<link rel="icon" type="image/png" href="/icon.png">
+<style>
+  @font-face {
+    font-family: 'Lexend';
+    src: url('../lexend.woff2') format('woff2');
+    font-weight: 100 900;
+    font-display: swap;
+  }
+  :root {
+    --ink: #1d2129;
+    --ink-soft: #5d6472;
+    --line: #e4e5ea;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 340; color: var(--ink); background: #fff; line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 0 24px; }
+  header { padding: 20px 0; }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 560; font-size: 1.05rem; text-decoration: none; }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  .lang { font-size: 0.92rem; color: var(--ink-soft); text-decoration: none; border-bottom: 1px solid var(--line); padding-bottom: 1px; }
+  .lang:hover { color: var(--ink); border-color: var(--ink); }
+  main { padding: 36px 0 72px; }
+  h1 { font-size: 2rem; font-weight: 620; letter-spacing: -0.02em; margin-bottom: 8px; }
+  .date { font-size: 0.88rem; color: var(--ink-soft); margin-bottom: 28px; }
+  .tldr {
+    background: #f2f2f5; border-radius: 12px; padding: 18px 20px;
+    font-size: 1.02rem; margin-bottom: 36px;
+  }
+  h2 { font-size: 1.15rem; font-weight: 600; margin: 32px 0 10px; }
+  p { margin-bottom: 14px; font-size: 0.98rem; }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 44px; }
+  footer p { font-size: 0.84rem; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="brand" href="/es/"><img src="/icon.png" alt="" width="30" height="30"> GTray</a>
+    <a class="lang" href="/privacy" lang="en">English</a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <h1>Política de Privacidad</h1>
+    <p class="date">Vigente desde el 10 de julio de 2026</p>
+
+    <p class="tldr"><strong>La versión corta:</strong> GTray no recolecta
+    datos. La app no tiene servidores, ni telemetría, ni analytics, ni cuentas
+    propias. Todo lo que guarda vive en tu Mac.</p>
+
+    <h2>Quién es responsable</h2>
+    <p>GTray es desarrollada por Matías Sánchez Cabrera (Chile). Para cualquier
+    tema relacionado con esta política, escribe a
+    <a href="mailto:matias.sanchez.c@gmail.com">matias.sanchez.c@gmail.com</a>.</p>
+
+    <h2>Qué datos recolecta la app</h2>
+    <p>Ninguno. Tus sesiones y cookies de Gmail, la configuración de la app y
+    las fotos de perfil en caché se guardan localmente en la carpeta de datos
+    de usuario de tu Mac, exactamente como un perfil de navegador. Nunca se
+    transmiten al desarrollador, y el desarrollador no tiene forma de
+    acceder a ellas.</p>
+
+    <h2>A dónde va el tráfico de la app</h2>
+    <p>GTray muestra la interfaz web real de Gmail, así que el tráfico de red
+    de la app va a Google: las páginas de Gmail con las que interactúas, y el
+    feed de mensajes del propio Gmail, consultado con tus cookies para calcular
+    los contadores de correos sin leer. Tu uso de Gmail se rige por los
+    términos y la política de privacidad de Google. GTray no está afiliada a
+    Google.</p>
+
+    <h2>El chequeo de actualizaciones</h2>
+    <p>La única solicitud de la app que no va a Google: una vez al día consulta
+    <code>gtray.app/version.json</code> — un GET simple, sin identificadores ni
+    cookies — para saber si existe una versión más nueva. Puedes desactivarlo
+    en <strong>GTray → Check for Updates Automatically</strong>.</p>
+
+    <h2>Este sitio web</h2>
+    <p>gtray.app es un sitio estático alojado en GitHub Pages detrás de
+    Cloudflare. No usa cookies ni scripts de seguimiento. Cloudflare procesa
+    direcciones IP en la medida necesaria para servir y proteger el sitio, y
+    nos entrega únicamente estadísticas agregadas no identificables.</p>
+
+    <h2>Terceros</h2>
+    <p>Las descargas se sirven desde GitHub Releases y están sujetas a la
+    política de privacidad de GitHub. Las donaciones las procesa Ko-fi;
+    nunca vemos tus datos de pago.</p>
+
+    <h2>Tus derechos</h2>
+    <p>Como no procesamos datos personales, no hay nada que acceder, corregir
+    ni eliminar de nuestro lado — tus datos ya son solo tuyos. Si tienes
+    cualquier duda o inquietud, contáctanos igual; con gusto ayudamos.</p>
+
+    <h2>Cambios</h2>
+    <p>Si esta política cambia alguna vez, actualizaremos esta página y su
+    fecha de vigencia. Esta política se rige por las leyes de Chile.</p>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>GTray es de código abierto bajo <a href="https://github.com/MatiasSanchezCabrera/gtray/blob/main/LICENSE">GPL-3.0</a>
+    · <a href="/es/">gtray.app</a> · <a href="/es/terms">Términos de Servicio</a></p>
+  </div>
+</footer>
+
+</body>
+</html>

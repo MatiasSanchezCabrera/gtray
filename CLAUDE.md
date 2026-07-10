@@ -115,7 +115,11 @@ landing/                  gtray.app website (static HTML/CSS/JS, no build step)
   translated copy of `landing/index.html` — same markup/CSS, texts in neutral
   Latin American Spanish. Any copy or design change to one page must be
   replicated in the other. Both declare `hreflang` and link to each other from
-  the header.
+  the header. The same applies to the legal pages: `privacy.html` and
+  `terms.html` exist in both languages (gtray.app/privacy, /terms, /es/privacy,
+  /es/terms — GitHub Pages serves them extensionless) and each EN/ES pair must
+  stay in sync. The privacy policy's update-check description must match the
+  README's.
 
 ## Conventions
 

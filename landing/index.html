@@ -242,6 +242,51 @@
     font-size: 0.8rem; font-weight: 600; line-height: 1;
   }
 
+  /* ---------- screenshots slider ---------- */
+  .slides { position: relative; width: 100%; }
+  /* reserve: tallest image ratio (1656/2680) + caption space */
+  .slides::before { content: ''; display: block; padding-top: calc(61.8% + 64px); }
+  .slide {
+    position: absolute; inset: 0; margin: 0;
+    display: flex; flex-direction: column;
+    opacity: 0; transition: opacity 0.55s ease; pointer-events: none;
+  }
+  .slide.active { opacity: 1; pointer-events: auto; }
+  .slide .frame { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  /* No border/shadow: the screenshots sit on the same white as the page and
+     carry their own macOS window shadow, so they blend right in */
+  .slide img {
+    max-width: 100%; max-height: 100%; width: auto; height: auto;
+  }
+  .slide figcaption {
+    min-height: 52px; padding-top: 12px;
+    display: flex; align-items: flex-start; justify-content: center;
+    font-size: 0.87rem; color: var(--ink-soft); text-align: center;
+  }
+  .arrow {
+    position: absolute; top: calc(50% - 32px); transform: translateY(-50%);
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 1px solid var(--line); background: rgba(255, 255, 255, 0.92);
+    color: var(--ink); cursor: pointer; z-index: 2;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 10px rgba(29, 33, 41, 0.14);
+    opacity: 0.8; transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .arrow:hover { opacity: 1; transform: translateY(-50%) scale(1.06); }
+  .arrow svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .arrow.prev { left: 12px; }
+  .arrow.next { right: 12px; }
+
+  .dots { display: flex; gap: 9px; justify-content: center; }
+  .dot {
+    width: 9px; height: 9px; border-radius: 50%; border: none; padding: 0;
+    background: var(--line); cursor: pointer; transition: background 0.2s ease;
+  }
+  .dot.active { background: var(--ink); }
+  @media (prefers-reduced-motion: reduce) {
+    .slide { transition: none; }
+  }
+
   .support { text-align: center; }
   .support p { font-size: 1.05rem; color: var(--ink-soft); max-width: 52ch; margin: 0 auto; }
   .support a {
@@ -294,6 +339,7 @@
     .hero .wrap { grid-template-columns: 1fr; gap: 48px; }
     .feats { grid-template-columns: 1fr; gap: 28px; }
     .trust .inner { grid-template-columns: 1fr; gap: 28px; }
+    .slides::before { padding-top: calc(61.8% + 96px); }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -387,6 +433,36 @@
 
   <section>
     <div class="wrap">
+      <p class="eyebrow">See it in action</p>
+      <h2 style="margin-bottom: 36px">The Gmail you know, in a home of its own</h2>
+      <div id="shots" aria-roledescription="carousel" aria-label="GTray screenshots">
+        <div class="slides">
+          <figure class="slide active">
+            <div class="frame"><img src="/shots/gmail.webp" alt="GTray window showing a full Gmail inbox, with the account rail on the left" width="1379" height="782"></div>
+            <figcaption>The real Gmail web experience — every account one click away in the rail.</figcaption>
+          </figure>
+          <figure class="slide">
+            <div class="frame"><img src="/shots/meet.webp" alt="A Google Meet call running in its own window on top of GTray" width="1336" height="789"></div>
+            <figcaption>Calendar, Meet and Drive open in their own windows, already signed in to the right account.</figcaption>
+          </figure>
+          <figure class="slide">
+            <div class="frame"><img src="/shots/dock.webp" alt="GTray in the macOS Dock with an unread count badge" width="1340" height="828"></div>
+            <figcaption>The Dock badge adds up the unread mail of every inbox — visible even with the window closed.</figcaption>
+          </figure>
+          <button class="arrow prev" aria-label="Previous screenshot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <button class="arrow next" aria-label="Next screenshot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+        <div class="dots">
+          <button class="dot active" aria-label="Screenshot 1: the Gmail experience"></button>
+          <button class="dot" aria-label="Screenshot 2: Meet in its own window"></button>
+          <button class="dot" aria-label="Screenshot 3: the Dock badge"></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
       <h2>A browser dedicated to your mail, not another client to learn</h2>
       <div class="feats">
         <div class="feat">
@@ -461,7 +537,8 @@
 <footer>
   <div class="wrap">
     <p>GTray is open source under <a href="https://github.com/MatiasSanchezCabrera/gtray/blob/main/LICENSE">GPL-3.0</a>.
-    Requires macOS 13 or later on Apple Silicon.</p>
+    Requires macOS 13 or later on Apple Silicon.
+    · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
     <p>GTray is not affiliated with Google. Gmail is a trademark of Google LLC.</p>
   </div>
 </footer>
@@ -513,6 +590,39 @@
 
     paint();
     setInterval(function () { if (!document.hidden) step(); }, 3200);
+  })();
+
+  // Screenshot slider: auto-advances, pauses on hover, dots to jump.
+  (function () {
+    var root = document.getElementById('shots');
+    if (!root) return;
+    var slides = root.querySelectorAll('.slide');
+    var dots = root.querySelectorAll('.dot');
+    var current = 0, timer = null;
+    var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function go(n) {
+      slides[current].classList.remove('active');
+      dots[current].classList.remove('active');
+      current = (n + slides.length) % slides.length;
+      slides[current].classList.add('active');
+      dots[current].classList.add('active');
+    }
+    function start() {
+      if (!reduced && !timer) {
+        timer = setInterval(function () { if (!document.hidden) go(current + 1); }, 4800);
+      }
+    }
+    function stop() { clearInterval(timer); timer = null; }
+
+    dots.forEach(function (d, n) {
+      d.addEventListener('click', function () { stop(); go(n); start(); });
+    });
+    root.querySelector('.arrow.prev').addEventListener('click', function () { stop(); go(current - 1); start(); });
+    root.querySelector('.arrow.next').addEventListener('click', function () { stop(); go(current + 1); start(); });
+    root.addEventListener('mouseenter', stop);
+    root.addEventListener('mouseleave', start);
+    start();
   })();
 </script>
 
