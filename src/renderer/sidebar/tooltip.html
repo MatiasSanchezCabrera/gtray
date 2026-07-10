@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- Floating account tooltip: rendered in its own tiny frameless window
+     because a DOM tooltip in the sidebar would be covered by the Gmail
+     WebContentsView. The main process sets the text and sizes the window
+     to fit (see the tooltip IPC in main.ts). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face {
+    font-family: 'Lexend';
+    font-style: normal;
+    font-weight: 100 900;
+    src: url('lexend.woff2') format('woff2');
+  }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  #pill {
+    display: inline-block;
+    box-sizing: border-box;
+    padding: 6px 11px;
+    background: #202124;
+    color: #ffffff;
+    font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    border-radius: 8px;
+    white-space: nowrap;
+    user-select: none;
+  }
+  @media (prefers-color-scheme: dark) {
+    #pill { background: #e8eaed; color: #202124; }
+  }
+</style>
+</head>
+<body><span id="pill"></span></body>
+</html>

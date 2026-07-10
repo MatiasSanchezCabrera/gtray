@@ -4,8 +4,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { Account, ConfigData, loadConfig, saveConfig } from './config'
 import { fetchUnread } from './polling'
-import { DMG_URL, fetchLatestVersion, isNewer } from './updates'
-import { ViewManager } from './views'
+import { DMG_URL, fetchLatestVersion, isNewer, RELEASE_URL } from './updates'
+import { SIDEBAR_WIDTH, ViewManager } from './views'
 import { updateBadges } from './badges'
 
 const COLORS = ['#1a73e8', '#188038', '#e8710a', '#9334e6', '#d93025', '#129eaf']
@@ -217,6 +217,55 @@ async function removeAccount(id: string): Promise<void> {
   }
 }
 
+// Floating tooltip next to the account rail. It's a tiny frameless child
+// window (not DOM) because the Gmail WebContentsView would cover any HTML
+// tooltip that leaves the 72px sidebar. See tooltip.html.
+let tooltipWin: BrowserWindow | null = null
+let tooltipSeq = 0 // invalidates in-flight shows when the pointer already left
+
+async function showAccountTooltip(text: string, y: number): Promise<void> {
+  if (!win) return
+  const seq = ++tooltipSeq
+  if (!tooltipWin || tooltipWin.isDestroyed()) {
+    tooltipWin = new BrowserWindow({
+      width: 10,
+      height: 10,
+      parent: win,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: false,
+      focusable: false,
+      show: false,
+      hasShadow: false,
+      skipTaskbar: true,
+    })
+    tooltipWin.setIgnoreMouseEvents(true)
+    await tooltipWin.loadFile(path.join(__dirname, '../sidebar/tooltip.html'))
+  }
+  const size = (await tooltipWin.webContents.executeJavaScript(
+    `(() => {
+      const p = document.getElementById('pill');
+      p.textContent = ${JSON.stringify(text)};
+      return { w: p.offsetWidth, h: p.offsetHeight };
+    })()`,
+  )) as { w: number; h: number }
+  if (seq !== tooltipSeq || !win) return // pointer left while we measured
+  const bounds = win.getContentBounds()
+  tooltipWin.setBounds({
+    x: Math.round(bounds.x + SIDEBAR_WIDTH + 6),
+    y: Math.round(bounds.y + y - size.h / 2),
+    width: Math.ceil(size.w),
+    height: Math.ceil(size.h),
+  })
+  tooltipWin.showInactive()
+}
+
+function hideAccountTooltip(): void {
+  tooltipSeq++
+  tooltipWin?.hide()
+}
+
 async function pollTick(force = false): Promise<void> {
   if (!views) return
   const now = Date.now()
@@ -267,15 +316,22 @@ async function checkForUpdatesInteractive(): Promise<void> {
   config.dismissedUpdateVersion = null // a manual check un-dismisses the pill
   saveConfig(config)
   pushState()
+  await showUpdateDialog(latest)
+}
+
+// Update hub, opened by the manual check and by the topbar pill: download
+// the dmg or read the release notes on GitHub.
+async function showUpdateDialog(latest: string): Promise<void> {
   const { response } = await dialog.showMessageBox({
     type: 'info',
     message: `GTray ${latest} is available`,
     detail: `You have ${app.getVersion()}. The download replaces the app in /Applications; your accounts and sessions are kept.`,
-    buttons: ['Download', 'Later'],
+    buttons: ['Download', 'Release Notes', 'Later'],
     defaultId: 0,
-    cancelId: 1,
+    cancelId: 2,
   })
   if (response === 0) void shell.openExternal(DMG_URL)
+  if (response === 1) void shell.openExternal(RELEASE_URL)
 }
 
 function buildMenu(): void {
@@ -409,6 +465,8 @@ function createWindow(): void {
     }
   })
   win.on('focus', () => void pollTick(true))
+  win.on('blur', hideAccountTooltip)
+  win.on('move', hideAccountTooltip)
 }
 
 void app.whenReady().then(() => {
@@ -428,14 +486,24 @@ void app.whenReady().then(() => {
     const url = APP_URLS[appId]
     if (url && config.activeAccountId) views?.openApp(config.activeAccountId, url)
   })
-  ipcMain.on('update-download', () => void shell.openExternal(DMG_URL))
+  ipcMain.on('update-open', () => {
+    if (availableUpdate) void showUpdateDialog(availableUpdate)
+  })
   ipcMain.on('update-dismiss', () => {
     config.dismissedUpdateVersion = availableUpdate
     saveConfig(config)
     pushState()
   })
+  ipcMain.on('account-tooltip', (_event, payload: { text: string; y: number } | null) => {
+    if (payload && typeof payload.text === 'string' && typeof payload.y === 'number') {
+      void showAccountTooltip(payload.text, payload.y)
+    } else {
+      hideAccountTooltip()
+    }
+  })
   ipcMain.on('account-menu', (_event, id: string) => {
     if (!win) return
+    hideAccountTooltip()
     Menu.buildFromTemplate([
       { label: 'Reload', click: () => views?.get(id)?.webContents.reload() },
       { type: 'separator' },

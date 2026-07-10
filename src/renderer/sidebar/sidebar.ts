@@ -17,9 +17,10 @@ interface TrayApi {
   select: (id: string) => void
   add: () => void
   accountMenu: (id: string) => void
+  accountTooltip: (payload: { text: string; y: number } | null) => void
   donate: () => void
   openApp: (app: 'calendar' | 'meet' | 'drive') => void
-  updateDownload: () => void
+  updateOpen: () => void
   updateDismiss: () => void
 }
 
@@ -49,14 +50,14 @@ driveEl.addEventListener('click', () => window.tray.openApp('drive'))
 const updateEl = document.getElementById('update') as HTMLElement
 const updateGoEl = document.getElementById('update-go') as HTMLElement
 const updateCloseEl = document.getElementById('update-close') as HTMLElement
-updateGoEl.addEventListener('click', () => window.tray.updateDownload())
+updateGoEl.addEventListener('click', () => window.tray.updateOpen())
 updateCloseEl.addEventListener('click', () => window.tray.updateDismiss())
 
 window.tray.onState((state) => {
   updateEl.classList.toggle('hidden', !state.update)
   if (state.update) {
     updateGoEl.textContent = `Update to ${state.update.version}`
-    updateGoEl.title = `GTray ${state.update.version} is available — download the new version`
+    updateGoEl.title = `GTray ${state.update.version} is available — download or see the release notes`
   }
 
   accountsEl.textContent = ''
@@ -64,7 +65,6 @@ window.tray.onState((state) => {
     const button = document.createElement('button')
     button.className = 'avatar' + (account.active ? ' active' : '')
     button.style.setProperty('--color', account.color)
-    button.title = account.email ?? account.name
 
     const initial = (account.email ?? account.name).charAt(0).toUpperCase()
     button.textContent = initial
@@ -95,6 +95,17 @@ window.tray.onState((state) => {
       event.preventDefault()
       window.tray.accountMenu(account.id)
     })
+    // Instant identification on hover: a native floating tooltip next to the
+    // avatar (a DOM tooltip would be covered by the Gmail view, and the
+    // built-in title one is too slow)
+    button.addEventListener('mouseenter', () => {
+      const rect = button.getBoundingClientRect()
+      window.tray.accountTooltip({
+        text: account.email ?? account.name,
+        y: rect.top + rect.height / 2,
+      })
+    })
+    button.addEventListener('mouseleave', () => window.tray.accountTooltip(null))
     accountsEl.appendChild(button)
   }
 

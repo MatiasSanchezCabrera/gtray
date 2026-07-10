@@ -245,7 +245,8 @@ body {
 #update {
   display: flex;
   align-items: center;
-  background: #1a73e8;
+  /* Ink pill, same palette as the account tooltip (tooltip.html) */
+  background: #202124;
   border-radius: 8px;
   -webkit-app-region: no-drag;
 }
@@ -257,11 +258,21 @@ body {
 #update button {
   border: none;
   background: transparent;
-  color: #fff;
+  color: #ffffff;
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
+}
+
+@media (prefers-color-scheme: dark) {
+  #update {
+    background: #e8eaed;
+  }
+
+  #update button {
+    color: #202124;
+  }
 }
 
 #update-go {
