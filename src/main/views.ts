@@ -1,4 +1,15 @@
-import { app, BrowserWindow, Session, session, shell, WebContents, WebContentsView } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  Menu,
+  MenuItemConstructorOptions,
+  Session,
+  session,
+  shell,
+  WebContents,
+  WebContentsView,
+} from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -73,7 +84,66 @@ function configureSession(ses: Session): void {
   })
 }
 
+// Electron shows no right-click menu by default. For a mail client that is
+// almost a bug: composing without spelling suggestions or copy/paste. Built
+// from the context-menu params, so it only offers what applies.
+function attachContextMenu(wc: WebContents): void {
+  wc.on('context-menu', (_event, params) => {
+    const items: MenuItemConstructorOptions[] = []
+
+    for (const suggestion of params.dictionarySuggestions) {
+      items.push({ label: suggestion, click: () => wc.replaceMisspelling(suggestion) })
+    }
+    if (params.misspelledWord) {
+      items.push({
+        label: 'Add to Dictionary',
+        click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      })
+      items.push({ type: 'separator' })
+    }
+
+    if (params.linkURL) {
+      items.push({
+        label: 'Open Link in Browser',
+        click: () => void shell.openExternal(params.linkURL),
+      })
+      items.push({ label: 'Copy Link', click: () => clipboard.writeText(params.linkURL) })
+      items.push({ type: 'separator' })
+    }
+
+    if (params.mediaType === 'image' && params.srcURL) {
+      items.push({ label: 'Copy Image', click: () => wc.copyImageAt(params.x, params.y) })
+      // Saved via the session's will-download handler (straight to ~/Downloads)
+      items.push({ label: 'Save Image', click: () => wc.downloadURL(params.srcURL) })
+      items.push({ type: 'separator' })
+    }
+
+    if (params.selectionText && !params.isEditable && process.platform === 'darwin') {
+      items.push({
+        label: `Look Up “${params.selectionText.slice(0, 30)}${params.selectionText.length > 30 ? '…' : ''}”`,
+        click: () => wc.showDefinitionForSelection(),
+      })
+      items.push({ type: 'separator' })
+    }
+
+    const edits: MenuItemConstructorOptions[] = []
+    if (params.editFlags.canCut) edits.push({ role: 'cut' })
+    if (params.editFlags.canCopy) edits.push({ role: 'copy' })
+    if (params.editFlags.canPaste) {
+      edits.push({ role: 'paste' })
+      edits.push({ role: 'pasteAndMatchStyle' })
+    }
+    if (params.editFlags.canSelectAll) edits.push({ role: 'selectAll' })
+    if (edits.length) items.push(...edits)
+
+    // Trim a trailing separator left by a skipped section
+    while (items.length && items[items.length - 1].type === 'separator') items.pop()
+    if (items.length) Menu.buildFromTemplate(items).popup()
+  })
+}
+
 export function wireGmailContents(wc: WebContents, chrome = false): void {
+  attachContextMenu(wc)
   wc.setWindowOpenHandler(({ url }) => {
     // Meet links (from Gmail or Calendar) can't run under the Firefox
     // disguise: give them a real-Chrome window instead of a regular popup

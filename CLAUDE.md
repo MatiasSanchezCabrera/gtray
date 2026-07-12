@@ -102,6 +102,13 @@ landing/                  gtray.app website (static HTML/CSS/JS, no build step)
   the rest (x≥72, y≥52). The `SIDEBAR_WIDTH` / `TOP_BAR_HEIGHT` constants in
   views.ts must match the sidebar CSS.
 
+- **Overlays are child windows, not DOM:** anything that must float over the
+  Gmail area (the account tooltip, the find-on-page bar) is a small frameless
+  child `BrowserWindow` (`tooltip.html`, `findbar.html`) because the Gmail
+  `WebContentsView` would cover any HTML overlay from the sidebar page. The
+  find bar is the focusable variant; per-account page zoom persists in
+  `config.json` (`zoomLevel`, Chromium levels).
+
 - **Icon:** raster (not vector). Source in `assets/icon-source.png`; processed
   with `scripts/whiten-icon.cjs` (rounded crop + black→white if needed) which
   generates the icns/png. See `assets/README.md`.

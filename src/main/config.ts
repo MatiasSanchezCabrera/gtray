@@ -8,6 +8,7 @@ export interface Account {
   name: string
   color: string
   photoUrl?: string | null // Gmail profile photo, extracted after login
+  zoomLevel?: number // page zoom (Chromium levels, factor = 1.2^level); unset = 100%
 }
 
 export interface WindowState {

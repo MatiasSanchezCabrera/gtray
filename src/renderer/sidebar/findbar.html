@@ -1,0 +1,82 @@
+<!doctype html>
+<!-- Find-on-page bar. Lives in a small focusable frameless child window
+     (like tooltip.html) because the Gmail WebContentsView would cover any
+     HTML overlay. Talks to main via the `findbar` preload API. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face {
+    font-family: 'Lexend';
+    src: url('lexend.woff2') format('woff2');
+    font-weight: 100 900;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: transparent; overflow: hidden; }
+  #bar {
+    display: flex; align-items: center; gap: 6px;
+    height: 40px; padding: 0 8px 0 12px;
+    background: #ffffff;
+    border: 1px solid #e4e5ea;
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(29, 33, 41, 0.18);
+    font-family: 'Lexend', -apple-system, sans-serif;
+  }
+  #q {
+    flex: 1; min-width: 0; border: none; outline: none;
+    font: 340 13px 'Lexend', -apple-system, sans-serif;
+    color: #1d2129; background: transparent;
+  }
+  #q::placeholder { color: #9aa0ab; }
+  #count {
+    font-size: 11px; color: #5d6472; white-space: nowrap;
+    min-width: 34px; text-align: right;
+  }
+  button {
+    width: 24px; height: 24px; border: none; border-radius: 6px;
+    background: transparent; color: #5d6472;
+    font: 400 15px/1 -apple-system, sans-serif; cursor: pointer;
+  }
+  button:hover { background: #f2f2f5; color: #1d2129; }
+  button:disabled { opacity: 0.35; cursor: default; }
+  button:disabled:hover { background: transparent; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <input id="q" type="text" placeholder="Find in Gmail page" spellcheck="false">
+  <span id="count"></span>
+  <button id="prev" title="Previous (⇧↩)">‹</button>
+  <button id="next" title="Next (↩)">›</button>
+  <button id="close" title="Close (esc)">✕</button>
+</div>
+<script>
+  const q = document.getElementById('q')
+  const count = document.getElementById('count')
+  const prev = document.getElementById('prev')
+  const next = document.getElementById('next')
+
+  function setStepsEnabled(on) { prev.disabled = next.disabled = !on }
+  setStepsEnabled(false)
+
+  q.addEventListener('input', () => {
+    window.findbar.query(q.value)
+    if (!q.value) { count.textContent = ''; setStepsEnabled(false) }
+  })
+  q.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') window.findbar.step(!e.shiftKey)
+    if (e.key === 'Escape') window.findbar.close()
+  })
+  prev.addEventListener('click', () => window.findbar.step(false))
+  next.addEventListener('click', () => window.findbar.step(true))
+  document.getElementById('close').addEventListener('click', () => window.findbar.close())
+
+  window.findbar.onCount((c) => {
+    if (!c || !q.value) { count.textContent = ''; setStepsEnabled(false); return }
+    count.textContent = c.total ? c.active + '/' + c.total : '0'
+    setStepsEnabled(c.total > 0)
+  })
+  window.findbar.onFocus(() => { q.focus(); q.select() })
+</script>
+</body>
+</html>
