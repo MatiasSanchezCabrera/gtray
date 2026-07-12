@@ -24,6 +24,24 @@ priority until agreed. For architecture and how the app works, see `CLAUDE.md`.
   the topbar scoped to the active account. Working prototype in the
   `experiment/account-tabs` branch; the user wasn't sold on it yet. Known
   loose end noted in the branch's commit message.
+- **Cross-platform: Windows and Linux (post-launch, if there's demand)** —
+  the app core is portable (isolated sessions, Atom polling, login disguise,
+  update check); the design decision is how the unread counter degrades per
+  platform:
+  - Windows: near-parity via taskbar overlay icon (`win.setOverlayIcon`)
+    acting as the badge. Convention: close minimizes to tray and keeps
+    counting. Caveat: unsigned builds trigger SmartScreen ("Windows
+    protected your PC") — real distribution needs a code-signing cert
+    (OV or Azure Trusted Signing), a separate budget decision.
+  - Linux: no global counter (Unity badge API is dead, GNOME has no tray by
+    default) — rely on the in-app per-account sidebar counters, offer a tray
+    icon with a drawn count where available (KDE; GNOME needs the
+    AppIndicator extension). Close quits.
+  - Both: no 52px top bar outside macOS (it only exists to host the traffic
+    lights) — native window frame and `TOP_BAR_HEIGHT = 0`, sidebar full
+    height. Platform-appropriate Firefox UA string for the Google login.
+    Packaging via electron-builder (NSIS for Windows; AppImage + deb for
+    Linux, checksums only) with CI jobs per OS.
 - _(add whatever comes up here)_
 
 ## Done (summary)
