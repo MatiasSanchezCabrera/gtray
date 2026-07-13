@@ -547,20 +547,21 @@ function buildMenu(): void {
         { label: 'Back', accelerator: 'CmdOrCtrl+[', click: goBack },
         { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: goForward },
         // Brackets need Option on ISO layouts (Spanish etc.), so Cmd+[ can't
-        // even be typed there. Hidden aliases with layout-independent keys;
-        // plain Cmd+arrows would steal cursor movement while composing.
+        // even be typed there. Hidden aliases on Cmd+Ctrl+arrows: layout
+        // independent and inert in text fields (plain Cmd+arrows would steal
+        // cursor movement while composing; Cmd+Alt often hosts user hotkeys).
         {
           label: 'Back (alias)',
           visible: false,
           acceleratorWorksWhenHidden: true,
-          accelerator: 'CmdOrCtrl+Alt+Left',
+          accelerator: 'Cmd+Ctrl+Left',
           click: goBack,
         },
         {
           label: 'Forward (alias)',
           visible: false,
           acceleratorWorksWhenHidden: true,
-          accelerator: 'CmdOrCtrl+Alt+Right',
+          accelerator: 'Cmd+Ctrl+Right',
           click: goForward,
         },
         { type: 'separator' },
@@ -723,13 +724,6 @@ void app.whenReady().then(() => {
     if (wc && findText) wc.findInPage(findText, { forward: forward !== false, findNext: true })
   })
   ipcMain.on('find-close', () => hideFindBar())
-  // Cmd+Left/Right from gmail-preload (context-aware: never while editing)
-  ipcMain.on('nav-back', (event) => {
-    if (event.sender.navigationHistory.canGoBack()) event.sender.navigationHistory.goBack()
-  })
-  ipcMain.on('nav-forward', (event) => {
-    if (event.sender.navigationHistory.canGoForward()) event.sender.navigationHistory.goForward()
-  })
   ipcMain.on('account-menu', (_event, id: string) => {
     if (!win) return
     hideAccountTooltip()
