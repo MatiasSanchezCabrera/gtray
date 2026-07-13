@@ -10,43 +10,43 @@
 // long the session survives (DBSC / server-side rotation).
 
 import { Session } from 'electron'
-import { execFileSync } from 'child_process'
+import { ChildProcess, execFileSync, spawn } from 'child_process'
 import * as crypto from 'crypto'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 
-export interface ChromeProfile {
-  name: string // "Default", "Profile 1"…
-  dir: string
-  mtimeMs: number // last time its cookies changed (proxy for "recently used")
+const CHROME_APP = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+
+export function chromeInstalled(): boolean {
+  return fs.existsSync(CHROME_APP)
 }
 
-function chromeRoot(): string {
-  return path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome')
+export interface FreshChrome {
+  proc: ChildProcess
+  profileDir: string // <userDataDir>/Default, where the Cookies store lands
+  userDataDir: string // throwaway root to delete when done
 }
 
-// Profiles that have a cookie store, newest first. We never auto-pick in the
-// experiment — the user chooses — but presenting newest-first is a good hint.
-export function listChromeProfiles(): ChromeProfile[] {
-  const root = chromeRoot()
-  const out: ChromeProfile[] = []
-  let entries: string[]
-  try {
-    entries = fs.readdirSync(root)
-  } catch {
-    return []
-  }
-  for (const entry of entries) {
-    if (entry === 'System Profile' || entry === 'Guest Profile') continue
-    try {
-      const st = fs.statSync(path.join(root, entry, 'Cookies'))
-      out.push({ name: entry, dir: path.join(root, entry), mtimeMs: st.mtimeMs })
-    } catch {
-      // no cookie store in this dir
-    }
-  }
-  return out.sort((a, b) => b.mtimeMs - a.mtimeMs)
+// Launch a REAL Chrome with an empty, throwaway profile pointed at the Google
+// login. The user signs in ONE account there; because the profile starts empty,
+// its cookie jar ends up holding exactly that account — clean isolation, and no
+// need to touch the user's real Chrome. The caller kills the process and deletes
+// userDataDir when finished.
+export function launchFreshChrome(): FreshChrome {
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gtray-login-'))
+  const proc = spawn(
+    CHROME_APP,
+    [
+      `--user-data-dir=${userDataDir}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--new-window',
+      'https://mail.google.com/mail/',
+    ],
+    { stdio: 'ignore' },
+  )
+  return { proc, profileDir: path.join(userDataDir, 'Default'), userDataDir }
 }
 
 // Chrome's cookie encryption key on macOS: PBKDF2 over a password kept in the
