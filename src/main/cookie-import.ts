@@ -31,22 +31,67 @@ export interface FreshChrome {
 // Launch a REAL Chrome with an empty, throwaway profile pointed at the Google
 // login. The user signs in ONE account there; because the profile starts empty,
 // its cookie jar ends up holding exactly that account — clean isolation, and no
-// need to touch the user's real Chrome. The caller kills the process and deletes
-// userDataDir when finished.
-export function launchFreshChrome(): FreshChrome {
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gtray-login-'))
-  const proc = spawn(
-    CHROME_APP,
-    [
-      `--user-data-dir=${userDataDir}`,
-      '--no-first-run',
-      '--no-default-browser-check',
-      '--new-window',
-      'https://mail.google.com/mail/',
-    ],
-    { stdio: 'ignore' },
-  )
-  return { proc, profileDir: path.join(userDataDir, 'Default'), userDataDir }
+// need to touch the user's real Chrome. Resolves once Chrome has actually
+// spawned; rejects if it can't start (an existing binary may still fail to run).
+export function launchFreshChrome(): Promise<FreshChrome> {
+  return new Promise((resolve, reject) => {
+    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gtray-login-'))
+    const proc = spawn(
+      CHROME_APP,
+      [
+        `--user-data-dir=${userDataDir}`,
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--new-window',
+        'https://mail.google.com/mail/',
+      ],
+      { stdio: 'ignore' },
+    )
+    // spawn emits 'error' asynchronously; without this listener it would crash
+    // the process. A later error (after spawn) is harmless — Chrome is closing.
+    let spawned = false
+    proc.once('error', (err) => {
+      if (!spawned) {
+        try {
+          fs.rmSync(userDataDir, { recursive: true, force: true })
+        } catch {
+          /* nothing to clean */
+        }
+        reject(err)
+      }
+    })
+    proc.once('spawn', () => {
+      spawned = true
+      resolve({ proc, profileDir: path.join(userDataDir, 'Default'), userDataDir })
+    })
+  })
+}
+
+// Ask Chrome to quit and wait for it to actually exit, so cookies are flushed
+// and the DB is stable before we read it (no snapshot race). Force-kills if it
+// doesn't stop in time, then leaves the caller to delete the profile.
+export function closeChrome(proc: ChildProcess): Promise<void> {
+  return new Promise((resolve) => {
+    if (proc.exitCode !== null || proc.signalCode !== null) return resolve()
+    const done = (): void => {
+      clearTimeout(timer)
+      resolve()
+    }
+    proc.once('exit', done)
+    const timer = setTimeout(() => {
+      try {
+        proc.kill('SIGKILL')
+      } catch {
+        /* already gone */
+      }
+      resolve()
+    }, 4000)
+    try {
+      proc.kill('SIGTERM') // Chrome traps this and shuts down cleanly (flushes)
+    } catch {
+      done()
+    }
+  })
 }
 
 // Chrome's cookie encryption key on macOS: PBKDF2 over a password kept in the
@@ -142,36 +187,43 @@ function toElectronCookie(r: RawCookie, value: string): Electron.CookiesSetDetai
   return details
 }
 
-export interface ImportResult {
-  imported: number
-  failed: string[] // cookie NAMES only (never values)
+export interface CookieData {
+  cookies: Electron.CookiesSetDetails[] // decrypted, ready to apply
   earliestExpiry: number | null // Unix seconds of the soonest-expiring cookie
 }
 
-// Reads + decrypts the profile's Google cookies and writes them into `ses`.
-// The caller is responsible for clearing `ses` first (clean destination).
-export async function importGoogleCookies(profileDir: string, ses: Session): Promise<ImportResult> {
+// Reads + decrypts the profile's Google cookies and returns them as DATA, so the
+// caller can apply them to a temporary validation session first and only touch
+// the definitive partition once the session is confirmed. Reads happen after
+// Chrome has exited (see closeChrome), so the DB is stable.
+export function readGoogleCookies(profileDir: string): CookieData {
   const key = safeStorageKey()
   const raw = readRawCookies(profileDir)
-  let imported = 0
+  const cookies: Electron.CookiesSetDetails[] = []
   let earliestExpiry: number | null = null
-  const failed: string[] = []
   for (const r of raw) {
     const value = decryptValue(r.encHex, key)
-    if (value === null) {
-      failed.push(`${r.name} (decrypt)`)
-      continue
-    }
+    if (value === null) continue // skip a cookie we couldn't decrypt
     const details = toElectronCookie(r, value)
-    try {
-      await ses.cookies.set(details)
-      imported++
-      if (details.expirationDate && (earliestExpiry === null || details.expirationDate < earliestExpiry)) {
-        earliestExpiry = details.expirationDate
-      }
-    } catch {
-      failed.push(r.name)
+    cookies.push(details)
+    if (details.expirationDate && (earliestExpiry === null || details.expirationDate < earliestExpiry)) {
+      earliestExpiry = details.expirationDate
     }
   }
-  return { imported, failed, earliestExpiry }
+  return { cookies, earliestExpiry }
+}
+
+// Applies already-decrypted cookies into a session. Caller clears the session
+// first when a clean destination is wanted.
+export async function applyCookies(ses: Session, cookies: Electron.CookiesSetDetails[]): Promise<number> {
+  let applied = 0
+  for (const details of cookies) {
+    try {
+      await ses.cookies.set(details)
+      applied++
+    } catch {
+      /* a cookie Electron rejects; the essential auth ones still go through */
+    }
+  }
+  return applied
 }

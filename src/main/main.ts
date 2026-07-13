@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItemConstructorOptions, nativeImage, shell, WebContents } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItemConstructorOptions, nativeImage, session, shell, WebContents } from 'electron'
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -7,7 +7,14 @@ import { fetchUnread } from './polling'
 import { DMG_URL, fetchLatestVersion, isNewer, RELEASE_URL } from './updates'
 import { SIDEBAR_WIDTH, ViewManager } from './views'
 import { updateBadges } from './badges'
-import { chromeInstalled, importGoogleCookies, launchFreshChrome } from './cookie-import'
+import {
+  applyCookies,
+  chromeInstalled,
+  closeChrome,
+  FreshChrome,
+  launchFreshChrome,
+  readGoogleCookies,
+} from './cookie-import'
 import { logAlive, logDied, logImport, logLaunch, logRemove, summaryText } from './experiment-log'
 
 const COLORS = ['#1a73e8', '#188038', '#e8710a', '#9334e6', '#d93025', '#129eaf']
@@ -229,9 +236,15 @@ async function removeAccount(id: string): Promise<void> {
 
 // EXPERIMENT (local only): sign in through a FRESH, throwaway Chrome profile,
 // then import that single-account session into the GTray partition. Real Chrome
-// passes Google's checks (and Advanced Protection); a fresh profile means the
-// jar holds exactly the one account the user signed in — clean isolation, no
-// touching their real Chrome. The user only does the login itself.
+// completes the login Google blocks in embedded apps (the HYPOTHESIS is that
+// this also works with Advanced Protection, and that the transplanted session
+// survives — that is what the experiment measures). A fresh profile means the
+// jar holds exactly the one account signed in — clean isolation, no touching
+// their real Chrome. The user only does the login itself.
+//
+// The definitive partition is only cleared/overwritten AFTER a temporary
+// validation session, seeded with the same cookies, authenticates against the
+// Atom feed. So a Keychain/decrypt/auth failure never destroys a working session.
 async function importSessionFromChrome(accountId: string): Promise<void> {
   const account = config.accounts.find((a) => a.id === accountId)
   if (!account || !win || !views) return
@@ -245,94 +258,124 @@ async function importSessionFromChrome(accountId: string): Promise<void> {
     return
   }
 
-  const chrome = launchFreshChrome()
-  const cleanup = (): void => {
+  let chrome: FreshChrome
+  try {
+    chrome = await launchFreshChrome()
+  } catch (err) {
+    await dialog.showMessageBox(win, {
+      type: 'error',
+      message: 'Could not open Chrome',
+      detail: `${(err as Error).message}`,
+    })
+    return
+  }
+
+  const validation = session.fromPartition('gtray-import-validate') // in-memory
+  const dropChromeDir = (dir: string): void => {
     try {
-      chrome.proc.kill()
-    } catch {
-      /* already gone */
-    }
-    try {
-      fs.rmSync(chrome.userDataDir, { recursive: true, force: true })
+      fs.rmSync(dir, { recursive: true, force: true })
     } catch {
       /* best effort; it's in /tmp */
     }
   }
 
-  const ses = views.sessionFor(accountId)
   try {
-    // Loop so an incomplete login can be retried in the same Chrome window.
     for (;;) {
       const go = await dialog.showMessageBox(win, {
         type: 'info',
         message: 'Sign in to Google in the Chrome window',
         detail:
           'A fresh Chrome window just opened. Sign in to the ONE account you want to add (password, 2FA or security key as usual).\n\n' +
-          'When you reach your inbox, come back here and click Import. macOS will ask once (via Keychain) to read the session; nothing leaves your Mac.',
+          'When you reach your inbox, come back here and click Import. Chrome will close, then macOS will ask once (via Keychain) to read the session. Nothing leaves your Mac.',
         buttons: ['Import', 'Cancel'],
         defaultId: 0,
         cancelId: 1,
       })
       if (go.response !== 0) {
-        cleanup()
+        await closeChrome(chrome.proc)
+        dropChromeDir(chrome.userDataDir)
         return
       }
 
-      await ses.clearStorageData() // clean destination
-      const result = await importGoogleCookies(chrome.profileDir, ses)
-      account.imported = true
-      account.importedAt = new Date().toISOString()
-      saveConfig(config)
-      views.reload(accountId)
+      // Close Chrome BEFORE reading so cookies are flushed and the DB is stable.
+      await closeChrome(chrome.proc)
 
-      // The Atom feed is the real "is it signed in" check.
-      await new Promise((r) => setTimeout(r, 2500))
-      await pollAccount(account)
-      pushState()
+      let failureDetail = ''
+      try {
+        const data = readGoogleCookies(chrome.profileDir) // read ONCE, as data
+        // Validate in a throwaway session and judge by the FRESH feed result —
+        // never the account's previously stored email.
+        await validation.clearStorageData()
+        await applyCookies(validation, data.cookies)
+        const v = await fetchUnread(validation)
+        await validation.clearStorageData()
 
-      if (account.email) {
-        cleanup() // close the throwaway Chrome + delete its profile
-        logImport(accountId, { email: account.email, profile: 'fresh Chrome', earliestExpiry: result.earliestExpiry })
-        const confirm = await dialog.showMessageBox(win, {
-          type: 'info',
-          message: `Imported session for ${account.email}`,
-          detail: `Imported ${result.imported} cookies. Keep this account?`,
-          buttons: ['Keep', 'Remove'],
-          defaultId: 0,
-          cancelId: 0,
-        })
-        if (confirm.response === 1) await removeImportedSession(accountId)
-        return
+        if (v.ok && v.email) {
+          // SUCCESS — only now clear and overwrite the definitive partition,
+          // applying the SAME cookie data (no second Chrome read).
+          const ses = views.sessionFor(accountId)
+          await ses.clearStorageData()
+          const applied = await applyCookies(ses, data.cookies)
+          dropChromeDir(chrome.userDataDir)
+
+          // Reflect the account that actually authenticated, not the old state.
+          account.imported = true
+          account.importedAt = new Date().toISOString()
+          account.email = v.email
+          account.name = v.email.split('@')[0]
+          account.photoUrl = null
+          status.set(accountId, { unread: v.count, authError: false, lastPoll: Date.now() })
+          saveConfig(config)
+          views.reload(accountId)
+          const view = views.get(accountId)
+          if (view) extractPhoto(account, view.webContents)
+          pushState()
+          logImport(accountId, { email: v.email, profile: 'fresh Chrome', earliestExpiry: data.earliestExpiry })
+
+          const confirm = await dialog.showMessageBox(win, {
+            type: 'info',
+            message: `Imported session for ${v.email}`,
+            detail: `Applied ${applied} cookies. Keep this account?`,
+            buttons: ['Keep', 'Remove'],
+            defaultId: 0,
+            cancelId: 0,
+          })
+          if (confirm.response === 1) await removeImportedSession(accountId)
+          return
+        }
+
+        failureDetail =
+          'No signed-in account was detected in the imported session. ' +
+          'Make sure you completed the login and reached your inbox, then try again.'
+      } catch (err) {
+        failureDetail = `Could not read the Chrome session.\n\n${(err as Error).message}`
       }
 
-      // No signed-in account yet — the login probably isn't finished.
-      account.imported = false
-      delete account.importedAt
-      logRemove(accountId)
-      saveConfig(config)
+      // Failure: the definitive partition was never touched.
+      dropChromeDir(chrome.userDataDir)
       const retry = await dialog.showMessageBox(win, {
         type: 'warning',
-        message: 'No signed-in account detected',
-        detail: 'It looks like the sign-in did not finish. Complete it in the Chrome window, then try again.',
+        message: 'Import did not work',
+        detail: failureDetail,
         buttons: ['Try Again', 'Cancel'],
         defaultId: 0,
         cancelId: 1,
       })
-      if (retry.response !== 0) {
-        cleanup()
-        await ses.clearStorageData()
-        views.reload(accountId)
-        pushState()
-        return
-      }
-      // loop: same Chrome window is still open for the user to finish
+      if (retry.response !== 0) return
+      chrome = await launchFreshChrome() // fresh window for the retry
     }
   } catch (err) {
-    cleanup()
+    await closeChrome(chrome.proc)
+    dropChromeDir(chrome.userDataDir)
+    try {
+      await validation.clearStorageData()
+    } catch {
+      /* nothing to clear */
+    }
     await dialog.showMessageBox(win, {
       type: 'error',
       message: 'Import failed',
-      detail: `Could not import the session.\n\n${(err as Error).message}`,
+      detail: `${(err as Error).message}`,
     })
   }
 }
@@ -354,12 +397,18 @@ async function offerImportOnBlock(accountId: string): Promise<void> {
   if (response === 0) void importSessionFromChrome(accountId)
 }
 
+// Clears the imported session and returns the account to a clean pending slot
+// (no stale email/name/photo/counts left behind).
 async function removeImportedSession(accountId: string): Promise<void> {
   const account = config.accounts.find((a) => a.id === accountId)
   if (!account || !views) return
   await views.sessionFor(accountId).clearStorageData()
   account.imported = false
   delete account.importedAt
+  account.email = null
+  account.name = 'Account'
+  account.photoUrl = null
+  status.set(accountId, { unread: 0, authError: false, lastPoll: 0 })
   logRemove(accountId)
   saveConfig(config)
   views.reload(accountId)
