@@ -146,6 +146,16 @@ function adjustZoom(delta: number | null): void {
   saveConfig(config)
 }
 
+function goBack(): void {
+  const wc = targetContents()
+  if (wc?.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
+}
+
+function goForward(): void {
+  const wc = targetContents()
+  if (wc?.navigationHistory.canGoForward()) wc.navigationHistory.goForward()
+}
+
 function cycleAccount(direction: 1 | -1): void {
   const ids = config.accounts.map((a) => a.id)
   if (ids.length < 2) return
@@ -534,21 +544,24 @@ function buildMenu(): void {
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => adjustZoom(-1) },
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: () => adjustZoom(null) },
         { type: 'separator' },
+        { label: 'Back', accelerator: 'CmdOrCtrl+[', click: goBack },
+        { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: goForward },
+        // Brackets need Option on ISO layouts (Spanish etc.), so Cmd+[ can't
+        // even be typed there. Hidden aliases with layout-independent keys;
+        // plain Cmd+arrows would steal cursor movement while composing.
         {
-          label: 'Back',
-          accelerator: 'CmdOrCtrl+[',
-          click: () => {
-            const wc = targetContents()
-            if (wc?.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
-          },
+          label: 'Back (alias)',
+          visible: false,
+          acceleratorWorksWhenHidden: true,
+          accelerator: 'CmdOrCtrl+Alt+Left',
+          click: goBack,
         },
         {
-          label: 'Forward',
-          accelerator: 'CmdOrCtrl+]',
-          click: () => {
-            const wc = targetContents()
-            if (wc?.navigationHistory.canGoForward()) wc.navigationHistory.goForward()
-          },
+          label: 'Forward (alias)',
+          visible: false,
+          acceleratorWorksWhenHidden: true,
+          accelerator: 'CmdOrCtrl+Alt+Right',
+          click: goForward,
         },
         { type: 'separator' },
         {
@@ -654,6 +667,12 @@ function createWindow(): void {
   win.on('move', hideAccountTooltip)
   win.on('move', positionFindBar)
   win.on('resize', positionFindBar)
+  // Safari-style trackpad navigation (needs the "swipe between pages"
+  // gesture enabled in System Settings). Fingers moving right = back.
+  win.on('swipe', (_event, direction) => {
+    if (direction === 'right') goBack()
+    if (direction === 'left') goForward()
+  })
 }
 
 void app.whenReady().then(() => {
