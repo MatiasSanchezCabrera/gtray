@@ -46,3 +46,29 @@ function hide(): void {
 }
 
 hide()
+
+// Browser-style Cmd+Left/Right history navigation, but context-aware: only
+// when focus is NOT editable, so the cursor keeps its line-start/line-end
+// behavior while composing. A global menu accelerator can't tell the
+// difference; from inside the page we can. Capture phase, so Gmail's own
+// handlers can't swallow it first.
+import { ipcRenderer } from 'electron'
+
+window.addEventListener(
+  'keydown',
+  (e) => {
+    if (!e.metaKey || e.altKey || e.shiftKey || e.ctrlKey) return
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    const t = e.target as HTMLElement | null
+    const editable =
+      !!t &&
+      (t.isContentEditable ||
+        t.tagName === 'INPUT' ||
+        t.tagName === 'TEXTAREA' ||
+        t.tagName === 'SELECT')
+    if (editable) return
+    e.preventDefault()
+    ipcRenderer.send(e.key === 'ArrowLeft' ? 'nav-back' : 'nav-forward')
+  },
+  true,
+)
