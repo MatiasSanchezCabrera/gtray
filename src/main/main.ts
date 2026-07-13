@@ -7,7 +7,8 @@ import { fetchUnread } from './polling'
 import { DMG_URL, fetchLatestVersion, isNewer, RELEASE_URL } from './updates'
 import { SIDEBAR_WIDTH, ViewManager } from './views'
 import { updateBadges } from './badges'
-import { runCookieSpike } from './cookie-import'
+import { importGoogleCookies, listChromeProfiles } from './cookie-import'
+import { logAlive, logDied, logImport, logLaunch, logRemove, summaryText } from './experiment-log'
 
 const COLORS = ['#1a73e8', '#188038', '#e8710a', '#9334e6', '#d93025', '#129eaf']
 const POLL_ESTABLISHED_MS = 60_000
@@ -117,10 +118,14 @@ async function pollAccount(account: Account): Promise<boolean> {
       saveConfig(config)
       changed = true
     }
+    // EXPERIMENT: the feed authenticating is our "session still alive" signal
+    if (account.imported) logAlive(account.id)
   } else if (result.reason === 'auth' && account.email && !st.authError) {
     st.authError = true
     st.unread = 0
     changed = true
+    // EXPERIMENT: an imported session going unauthenticated = it died
+    if (account.imported) logDied(account.id)
   }
   // Network errors: keep the last known count
   return changed
@@ -184,7 +189,11 @@ function addAccount(): void {
   }
   config.accounts.push(account)
   status.set(account.id, { unread: 0, authError: false, lastPoll: 0 })
-  const view = views?.create(account.id, () => onGmailActivity(account.id))
+  const view = views?.create(
+    account.id,
+    () => onGmailActivity(account.id),
+    (id) => void offerImportOnBlock(id),
+  )
   if (view) extractPhoto(account, view.webContents)
   selectAccount(account.id)
 }
@@ -216,6 +225,127 @@ async function removeAccount(id: string): Promise<void> {
     saveConfig(config)
     pushState()
   }
+}
+
+// EXPERIMENT (local only): import a Google web session from the user's real
+// Chrome into an account's partition, the robust fallback for Google blocking
+// embedded logins. Explicit and manual — no auto-import, no periodic reads.
+async function importSessionFromChrome(accountId: string): Promise<void> {
+  const account = config.accounts.find((a) => a.id === accountId)
+  if (!account || !win || !views) return
+
+  const profiles = listChromeProfiles()
+  if (profiles.length === 0) {
+    await dialog.showMessageBox(win, {
+      type: 'error',
+      message: 'Google Chrome not found',
+      detail: 'This experiment imports a session from Google Chrome, but no Chrome profile with cookies was found.',
+    })
+    return
+  }
+
+  // Manual profile choice (newest-first). Never auto-picked.
+  let profile = profiles[0]
+  if (profiles.length > 1) {
+    const buttons = [...profiles.map((p) => p.name), 'Cancel']
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'question',
+      message: 'Which Chrome profile has the account?',
+      detail: 'Pick the Chrome profile signed in to the Gmail account you want. Profiles are listed most-recently-used first.',
+      buttons,
+      cancelId: buttons.length - 1,
+    })
+    if (response >= profiles.length) return
+    profile = profiles[response]
+  }
+
+  // Open Chrome so the user can make the target account the active (u/0) one,
+  // then confirm. A shared Chrome jar carries every signed-in account; GTray
+  // loads the primary. For clean isolation, use a profile with only that account.
+  void shell.openExternal('https://mail.google.com/')
+  const go = await dialog.showMessageBox(win, {
+    type: 'info',
+    message: `Import session from Chrome (${profile.name})?`,
+    detail:
+      'A Chrome window just opened. Make sure the account you want is the one shown (the primary account).\n\n' +
+      'When you click Import, macOS will ask once (via Keychain) to read that profile’s Google cookies. Nothing leaves your Mac.',
+    buttons: ['Import Now', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+  })
+  if (go.response !== 0) return
+
+  const ses = views.sessionFor(accountId)
+  try {
+    await ses.clearStorageData() // clean destination: no mixed leftovers
+    const result = await importGoogleCookies(profile.dir, ses)
+    if (result.imported === 0) {
+      await dialog.showMessageBox(win, {
+        type: 'error',
+        message: 'No cookies imported',
+        detail: 'No Google session cookies were found in that profile. Make sure you are signed in to Gmail there, then try again.',
+      })
+      return
+    }
+
+    account.imported = true
+    account.importedAt = new Date().toISOString()
+    saveConfig(config)
+    views.reload(accountId) // reload Gmail with the transplanted session
+
+    // Learn the email via the Atom feed (same path the app already uses), then confirm.
+    await new Promise((r) => setTimeout(r, 2500))
+    await pollAccount(account)
+    pushState()
+    logImport(accountId, { email: account.email, profile: profile.name, earliestExpiry: result.earliestExpiry })
+
+    const confirm = await dialog.showMessageBox(win, {
+      type: account.email ? 'info' : 'warning',
+      message: account.email ? `Imported session for ${account.email}` : 'Imported, but no account detected yet',
+      detail: account.email
+        ? `Imported ${result.imported} cookies. Is this the account you wanted?`
+        : 'Gmail may still be loading. If it stays on a login screen, remove the session and try another profile.',
+      buttons: ['Keep', 'Remove'],
+      defaultId: 0,
+      cancelId: 0,
+    })
+    if (confirm.response === 1) await removeImportedSession(accountId)
+  } catch (err) {
+    await dialog.showMessageBox(win, {
+      type: 'error',
+      message: 'Import failed',
+      detail: `Could not import the session.\n\n${(err as Error).message}`,
+    })
+  }
+}
+
+// Shown when the embedded login hits Google's "browser may not be secure" block.
+async function offerImportOnBlock(accountId: string): Promise<void> {
+  if (!win) return
+  win.show()
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question',
+    message: 'Google blocked sign-in inside GTray',
+    detail:
+      'Google blocks signing in from embedded apps ("This browser or app may not be secure"). ' +
+      'GTray can import your existing session from Google Chrome instead. This is experimental.',
+    buttons: ['Import from Chrome…', 'Not now'],
+    defaultId: 0,
+    cancelId: 1,
+  })
+  if (response === 0) void importSessionFromChrome(accountId)
+}
+
+async function removeImportedSession(accountId: string): Promise<void> {
+  const account = config.accounts.find((a) => a.id === accountId)
+  if (!account || !views) return
+  await views.sessionFor(accountId).clearStorageData()
+  account.imported = false
+  delete account.importedAt
+  logRemove(accountId)
+  saveConfig(config)
+  views.reload(accountId)
+  pushState()
 }
 
 // Floating tooltip next to the account rail. It's a tiny frameless child
@@ -387,6 +517,28 @@ function buildMenu(): void {
           },
         },
         { type: 'separator' },
+        {
+          // EXPERIMENT (local build only)
+          label: 'Import Session from Chrome…',
+          enabled: !!config.activeAccountId,
+          click: () => {
+            if (config.activeAccountId) void importSessionFromChrome(config.activeAccountId)
+          },
+        },
+        {
+          label: 'Remove Imported Session',
+          enabled: !!config.accounts.find((a) => a.id === config.activeAccountId)?.imported,
+          click: () => {
+            if (config.activeAccountId) void removeImportedSession(config.activeAccountId)
+          },
+        },
+        {
+          label: 'Show Import Experiment Log',
+          click: () => {
+            if (win) void dialog.showMessageBox(win, { type: 'info', message: 'Import experiment', detail: summaryText() })
+          },
+        },
+        { type: 'separator' },
         { role: 'close' },
       ],
     },
@@ -447,8 +599,14 @@ function createWindow(): void {
   views = new ViewManager(win)
   for (const account of config.accounts) {
     status.set(account.id, { unread: 0, authError: false, lastPoll: 0 })
-    const view = views.create(account.id, () => onGmailActivity(account.id))
+    const view = views.create(
+      account.id,
+      () => onGmailActivity(account.id),
+      (id) => void offerImportOnBlock(id),
+    )
     extractPhoto(account, view.webContents)
+    // EXPERIMENT: count launches an imported session survives
+    if (account.imported) logLaunch(account.id)
   }
   if (config.activeAccountId && !config.accounts.some((a) => a.id === config.activeAccountId)) {
     config.activeAccountId = null
@@ -471,13 +629,6 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(() => {
-  // Throwaway spike: `npm run spike` transplants a Chrome Google session into
-  // an Electron partition to see if Gmail loads logged in. Inert otherwise.
-  if (process.argv.includes('--cookie-spike')) {
-    void runCookieSpike()
-    return
-  }
-
   config = loadConfig()
 
   // Dock icon. A packaged app gets it from the bundle (.icns), but in
@@ -512,8 +663,15 @@ void app.whenReady().then(() => {
   ipcMain.on('account-menu', (_event, id: string) => {
     if (!win) return
     hideAccountTooltip()
+    const imported = !!config.accounts.find((a) => a.id === id)?.imported
     Menu.buildFromTemplate([
       { label: 'Reload', click: () => views?.get(id)?.webContents.reload() },
+      { type: 'separator' },
+      // EXPERIMENT (local build only)
+      { label: 'Import Session from Chrome…', click: () => void importSessionFromChrome(id) },
+      ...(imported
+        ? [{ label: 'Remove Imported Session', click: () => void removeImportedSession(id) }]
+        : []),
       { type: 'separator' },
       { label: 'Remove Account…', click: () => void removeAccount(id) },
     ]).popup({ window: win })

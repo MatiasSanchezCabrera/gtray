@@ -1,48 +1,52 @@
-// SPIKE (throwaway): validate whether a Google web session logged in from the
-// user's REAL Chrome can be transplanted into an Electron partition, so
-// mail.google.com loads already authenticated — without the embedded login
-// that Google blocks. If this holds (and survives DBSC), it is the basis for
-// the real "log in via your browser" flow. Not wired into the app; run with
-// `npm run spike`. macOS + Google Chrome only.
+// EXPERIMENT (local only, not for release): import a live Google web session
+// from the user's real Chrome into an Electron partition, so Gmail loads
+// authenticated without the embedded login Google blocks. Reads Chrome's
+// cookie store (macOS `sqlite3` CLI), decrypts with the key from the login
+// Keychain (`security` CLI) using Node's crypto — zero new dependencies.
+// Never logs cookie VALUES. macOS + Google Chrome only.
 //
-// Zero new dependencies: reads Chrome's cookie DB with the macOS `sqlite3`
-// CLI, gets the decryption key from the login Keychain via `security`, and
-// decrypts with Node's built-in crypto. Never logs cookie VALUES, only names.
+// Validated by the spike (branch spike/chrome-cookie-import): the transplanted
+// session loads Gmail logged in. Open question this experiment measures: how
+// long the session survives (DBSC / server-side rotation).
 
-import { BrowserWindow, session, Session } from 'electron'
+import { Session } from 'electron'
 import { execFileSync } from 'child_process'
 import * as crypto from 'crypto'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 
+export interface ChromeProfile {
+  name: string // "Default", "Profile 1"…
+  dir: string
+  mtimeMs: number // last time its cookies changed (proxy for "recently used")
+}
+
 function chromeRoot(): string {
   return path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome')
 }
 
-// Which Chrome profile to read. A user can have several ("Default", "Profile 1"…)
-// and only one holds their live Gmail session. Default is often stale, so we
-// auto-pick the profile whose Cookies file was written most recently (i.e. the
-// one actually in use), unless CHROME_PROFILE forces a choice.
-function chromeProfileDir(): string {
+// Profiles that have a cookie store, newest first. We never auto-pick in the
+// experiment — the user chooses — but presenting newest-first is a good hint.
+export function listChromeProfiles(): ChromeProfile[] {
   const root = chromeRoot()
-  if (process.env.CHROME_PROFILE) return path.join(root, process.env.CHROME_PROFILE)
-
-  let best: { dir: string; mtime: number } | null = null
-  for (const entry of fs.readdirSync(root)) {
-    if (entry === 'System Profile' || entry === 'Guest Profile') continue
-    const cookies = path.join(root, entry, 'Cookies')
-    let st: fs.Stats
-    try {
-      st = fs.statSync(cookies)
-    } catch {
-      continue
-    }
-    if (!best || st.mtimeMs > best.mtime) best = { dir: path.join(root, entry), mtime: st.mtimeMs }
+  const out: ChromeProfile[] = []
+  let entries: string[]
+  try {
+    entries = fs.readdirSync(root)
+  } catch {
+    return []
   }
-  if (!best) throw new Error(`No Chrome profile with cookies found under ${root}`)
-  console.log(`[cookie-spike] using Chrome profile: ${path.basename(best.dir)}`)
-  return best.dir
+  for (const entry of entries) {
+    if (entry === 'System Profile' || entry === 'Guest Profile') continue
+    try {
+      const st = fs.statSync(path.join(root, entry, 'Cookies'))
+      out.push({ name: entry, dir: path.join(root, entry), mtimeMs: st.mtimeMs })
+    } catch {
+      // no cookie store in this dir
+    }
+  }
+  return out.sort((a, b) => b.mtimeMs - a.mtimeMs)
 }
 
 // Chrome's cookie encryption key on macOS: PBKDF2 over a password kept in the
@@ -66,35 +70,37 @@ interface RawCookie {
   sameSite: string
 }
 
-function readRawCookies(): RawCookie[] {
-  const src = path.join(chromeProfileDir(), 'Cookies')
+function readRawCookies(profileDir: string): RawCookie[] {
+  const src = path.join(profileDir, 'Cookies')
   if (!fs.existsSync(src)) {
-    throw new Error(`Chrome cookies not found at ${src}. Is Chrome installed, and is the account in this profile?`)
+    throw new Error(`No cookie store at ${src}. Is this the right Chrome profile, signed in to Gmail?`)
   }
   // Copy the DB (and WAL sidecars) so a running Chrome's lock doesn't block us
-  // and recent writes aren't missed.
+  // and recent writes aren't missed. Cleaned up in `finally`.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gtray-cookies-'))
-  const dst = path.join(tmp, 'Cookies')
-  fs.copyFileSync(src, dst)
-  for (const ext of ['-wal', '-shm']) {
-    if (fs.existsSync(src + ext)) fs.copyFileSync(src + ext, dst + ext)
+  try {
+    const dst = path.join(tmp, 'Cookies')
+    fs.copyFileSync(src, dst)
+    for (const ext of ['-wal', '-shm']) {
+      if (fs.existsSync(src + ext)) fs.copyFileSync(src + ext, dst + ext)
+    }
+    const sql =
+      'SELECT host_key, name, hex(encrypted_value), path, expires_utc, is_secure, is_httponly, samesite ' +
+      "FROM cookies WHERE host_key LIKE '%google.com'"
+    const raw = execFileSync('/usr/bin/sqlite3', ['-tabs', dst, sql], {
+      encoding: 'utf8',
+      maxBuffer: 32 * 1024 * 1024,
+    })
+    const rows: RawCookie[] = []
+    for (const line of raw.split('\n')) {
+      if (!line) continue
+      const [host, name, encHex, p, expires, secure, httpOnly, sameSite] = line.split('\t')
+      rows.push({ host, name, encHex, path: p, expires, secure, httpOnly, sameSite })
+    }
+    return rows
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
   }
-  const sql =
-    "SELECT host_key, name, hex(encrypted_value), path, expires_utc, is_secure, is_httponly, samesite " +
-    "FROM cookies WHERE host_key LIKE '%google.com'"
-  const out = execFileSync('/usr/bin/sqlite3', ['-tabs', dst, sql], {
-    encoding: 'utf8',
-    maxBuffer: 32 * 1024 * 1024,
-  })
-  fs.rmSync(tmp, { recursive: true, force: true })
-
-  const rows: RawCookie[] = []
-  for (const line of out.split('\n')) {
-    if (!line) continue
-    const [host, name, encHex, p, expires, secure, httpOnly, sameSite] = line.split('\t')
-    rows.push({ host, name, encHex, path: p, expires, secure, httpOnly, sameSite })
-  }
-  return rows
 }
 
 function decryptValue(encHex: string, key: Buffer): string | null {
@@ -136,10 +142,19 @@ function toElectronCookie(r: RawCookie, value: string): Electron.CookiesSetDetai
   return details
 }
 
-async function importGoogleCookies(ses: Session): Promise<{ ok: number; failed: string[] }> {
+export interface ImportResult {
+  imported: number
+  failed: string[] // cookie NAMES only (never values)
+  earliestExpiry: number | null // Unix seconds of the soonest-expiring cookie
+}
+
+// Reads + decrypts the profile's Google cookies and writes them into `ses`.
+// The caller is responsible for clearing `ses` first (clean destination).
+export async function importGoogleCookies(profileDir: string, ses: Session): Promise<ImportResult> {
   const key = safeStorageKey()
-  const raw = readRawCookies()
-  let ok = 0
+  const raw = readRawCookies(profileDir)
+  let imported = 0
+  let earliestExpiry: number | null = null
   const failed: string[] = []
   for (const r of raw) {
     const value = decryptValue(r.encHex, key)
@@ -147,39 +162,16 @@ async function importGoogleCookies(ses: Session): Promise<{ ok: number; failed: 
       failed.push(`${r.name} (decrypt)`)
       continue
     }
+    const details = toElectronCookie(r, value)
     try {
-      await ses.cookies.set(toElectronCookie(r, value))
-      ok++
+      await ses.cookies.set(details)
+      imported++
+      if (details.expirationDate && (earliestExpiry === null || details.expirationDate < earliestExpiry)) {
+        earliestExpiry = details.expirationDate
+      }
     } catch {
       failed.push(r.name)
     }
   }
-  return { ok, failed }
-}
-
-export async function runCookieSpike(): Promise<void> {
-  // Persistent partition so we can also relaunch and check the session HOLDS
-  // over time (the DBSC question). Delete persist:cookie-spike to reset.
-  const ses = session.fromPartition('persist:cookie-spike')
-  // Mirror production: strip Chromium client hints on Google hosts (the global
-  // Firefox UA from main.ts already applies process-wide).
-  ses.webRequest.onBeforeSendHeaders({ urls: ['https://*.google.com/*'] }, (details, cb) => {
-    const h = details.requestHeaders
-    for (const k of Object.keys(h)) if (k.toLowerCase().startsWith('sec-ch-')) delete h[k]
-    cb({ requestHeaders: h })
-  })
-
-  console.log('[cookie-spike] harvesting Google cookies from Chrome…')
-  const result = await importGoogleCookies(ses)
-  console.log(`[cookie-spike] imported ${result.ok} cookies; ${result.failed.length} failed`)
-  if (result.failed.length) console.log('[cookie-spike] failed names:', result.failed.join(', '))
-
-  const win = new BrowserWindow({
-    width: 1100,
-    height: 800,
-    title: 'GTray cookie spike — is this logged in?',
-    webPreferences: { session: ses },
-  })
-  await win.loadURL('https://mail.google.com/mail/u/0/')
-  console.log('[cookie-spike] loaded mail.google.com/u/0 — check the window: logged in or a login screen?')
+  return { imported, failed, earliestExpiry }
 }

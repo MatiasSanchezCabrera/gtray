@@ -148,7 +148,7 @@ export class ViewManager {
     return session.fromPartition(`persist:account-${id}`)
   }
 
-  create(id: string, onActivity: () => void): WebContentsView {
+  create(id: string, onActivity: () => void, onLoginBlock?: (id: string) => void): WebContentsView {
     const ses = this.sessionFor(id)
     configureSession(ses)
     const view = new WebContentsView({
@@ -165,11 +165,37 @@ export class ViewManager {
     })
     wireGmailContents(view.webContents)
     view.webContents.on('page-title-updated', onActivity)
+
+    // EXPERIMENT: detect Google's "This browser or app may not be secure" block
+    // on the embedded login so the app can offer the Chrome-import fallback.
+    // Best-effort (English text); the manual menu item is the real backstop.
+    if (onLoginBlock) {
+      let notified = false
+      view.webContents.on('did-finish-load', () => {
+        if (notified || !view.webContents.getURL().includes('accounts.google.com')) return
+        view.webContents
+          .executeJavaScript(`(((document.body && document.body.innerText) || '').toLowerCase().includes('may not be secure'))`)
+          .then((hit: unknown) => {
+            if (hit === true && !notified) {
+              notified = true
+              onLoginBlock(id)
+            }
+          })
+          .catch(() => {})
+      })
+    }
+
     void view.webContents.loadURL(GMAIL_URL)
     view.setVisible(false)
     this.win.contentView.addChildView(view)
     this.views.set(id, view)
     return view
+  }
+
+  // EXPERIMENT: after importing cookies into an account's partition, send its
+  // view back to the Gmail inbox so it picks up the transplanted session.
+  reload(id: string): void {
+    void this.views.get(id)?.webContents.loadURL(GMAIL_URL)
   }
 
   get(id: string): WebContentsView | undefined {

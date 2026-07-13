@@ -8,6 +8,8 @@ export interface Account {
   name: string
   color: string
   photoUrl?: string | null // Gmail profile photo, extracted after login
+  imported?: boolean // EXPERIMENT: session was imported from Chrome, not logged in here
+  importedAt?: string // ISO timestamp of that import
 }
 
 export interface WindowState {
