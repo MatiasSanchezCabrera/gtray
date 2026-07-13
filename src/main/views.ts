@@ -168,21 +168,29 @@ export class ViewManager {
 
     // EXPERIMENT: detect Google's "This browser or app may not be secure" block
     // on the embedded login so the app can offer the Chrome-import fallback.
-    // Best-effort (English text); the manual menu item is the real backstop.
+    // Google renders that message client-side AFTER the load finishes, so we
+    // poll the page text for a few seconds rather than checking once. Best-effort
+    // (English text); the manual menu item is the real backstop.
     if (onLoginBlock) {
       let notified = false
-      view.webContents.on('did-finish-load', () => {
-        if (notified || !view.webContents.getURL().includes('accounts.google.com')) return
+      const check = (tries: number): void => {
+        if (notified || view.webContents.isDestroyed()) return
+        if (!view.webContents.getURL().includes('accounts.google.com')) return
         view.webContents
           .executeJavaScript(`(((document.body && document.body.innerText) || '').toLowerCase().includes('may not be secure'))`)
           .then((hit: unknown) => {
-            if (hit === true && !notified) {
+            if (hit === true) {
               notified = true
               onLoginBlock(id)
+            } else if (tries > 0) {
+              setTimeout(() => check(tries - 1), 800)
             }
           })
-          .catch(() => {})
-      })
+          .catch(() => {
+            if (tries > 0) setTimeout(() => check(tries - 1), 800)
+          })
+      }
+      view.webContents.on('did-finish-load', () => check(6)) // ~5s of polling
     }
 
     void view.webContents.loadURL(GMAIL_URL)
