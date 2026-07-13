@@ -10,6 +10,7 @@ export interface Account {
   photoUrl?: string | null // Gmail profile photo, extracted after login
   imported?: boolean // EXPERIMENT: session was imported from Chrome, not logged in here
   importedAt?: string // ISO timestamp of that import
+  zoomLevel?: number // page zoom (Chromium levels, factor = 1.2^level); unset = 100%
 }
 
 export interface WindowState {

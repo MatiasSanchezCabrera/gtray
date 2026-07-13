@@ -1,11 +1,23 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItemConstructorOptions, nativeImage, session, shell, WebContents } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  MenuItemConstructorOptions,
+  nativeImage,
+  session,
+  shell,
+  WebContents,
+  WebContentsView,
+} from 'electron'
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
 import { Account, ConfigData, loadConfig, saveConfig } from './config'
 import { fetchUnread } from './polling'
 import { DMG_URL, fetchLatestVersion, isNewer, RELEASE_URL } from './updates'
-import { SIDEBAR_WIDTH, ViewManager } from './views'
+import { SIDEBAR_WIDTH, TOP_BAR_HEIGHT, ViewManager } from './views'
 import { updateBadges } from './badges'
 import {
   applyCookies,
@@ -101,10 +113,65 @@ function pushState(): void {
 }
 
 function selectAccount(id: string | null, persist = true): void {
+  hideFindBar() // an open find session belongs to the view being left
   config.activeAccountId = id
   views?.setActive(id)
   if (persist) saveConfig(config)
   pushState()
+}
+
+// Menu commands (zoom, back/forward, print, open in browser) target the
+// focused app window (Calendar/Meet/Drive or a Gmail popup) when there is
+// one, and the active Gmail view otherwise.
+function targetContents(): WebContents | undefined {
+  const focused = BrowserWindow.getFocusedWindow()
+  if (focused && focused !== win && focused !== findWin && focused !== tooltipWin) {
+    return focused.webContents
+  }
+  return views?.active()?.webContents
+}
+
+// --- page zoom (browser-style Cmd+/Cmd-/Cmd0) ---
+// Chromium levels: factor = 1.2^level. For the active Gmail view the level
+// persists per account; for app windows and popups it is session-only.
+const ZOOM_MIN = -5
+const ZOOM_MAX = 5
+
+function adjustZoom(delta: number | null): void {
+  const focused = BrowserWindow.getFocusedWindow()
+  if (focused && focused !== win && focused !== findWin && focused !== tooltipWin) {
+    const wc = focused.webContents
+    wc.setZoomLevel(delta === null ? 0 : wc.getZoomLevel() + delta)
+    return
+  }
+  const account = config.accounts.find((a) => a.id === config.activeAccountId)
+  const view = views?.active()
+  if (!account || !view) return
+  const level =
+    delta === null
+      ? 0
+      : Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, (account.zoomLevel ?? 0) + delta))
+  account.zoomLevel = level
+  view.webContents.setZoomLevel(level)
+  saveConfig(config)
+}
+
+function goBack(): void {
+  const wc = targetContents()
+  if (wc?.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
+}
+
+function goForward(): void {
+  const wc = targetContents()
+  if (wc?.navigationHistory.canGoForward()) wc.navigationHistory.goForward()
+}
+
+function cycleAccount(direction: 1 | -1): void {
+  const ids = config.accounts.map((a) => a.id)
+  if (ids.length < 2) return
+  const current = Math.max(0, ids.indexOf(config.activeAccountId ?? ''))
+  win?.show()
+  selectAccount(ids[(current + direction + ids.length) % ids.length])
 }
 
 // Polls one account's feed and updates its status. Returns whether anything changed.
@@ -187,6 +254,21 @@ function extractPhoto(account: Account, wc: WebContents): void {
   wc.on('did-finish-load', () => attempt(5))
 }
 
+// Per-account wiring for a freshly created Gmail view: profile photo
+// extraction, the persisted zoom level, and find-in-page match reporting.
+function wireAccountView(account: Account, view: WebContentsView): void {
+  extractPhoto(account, view.webContents)
+  view.webContents.on('did-finish-load', () => {
+    if (account.zoomLevel) view.webContents.setZoomLevel(account.zoomLevel)
+  })
+  view.webContents.on('found-in-page', (_event, result) => {
+    findWin?.webContents.send('find-count', {
+      active: result.activeMatchOrdinal,
+      total: result.matches,
+    })
+  })
+}
+
 function addAccount(): void {
   const account: Account = {
     id: randomUUID(),
@@ -201,7 +283,7 @@ function addAccount(): void {
     () => onGmailActivity(account.id),
     (id) => void offerImportOnBlock(id),
   )
-  if (view) extractPhoto(account, view.webContents)
+  if (view) wireAccountView(account, view)
   selectAccount(account.id)
 }
 
@@ -464,6 +546,60 @@ function hideAccountTooltip(): void {
   tooltipWin?.hide()
 }
 
+// Find-on-page bar. Same child-window trick as the tooltip (a DOM overlay
+// would be covered by the Gmail WebContentsView), but focusable: it hosts
+// the search input. See findbar.html.
+const FIND_W = 336
+const FIND_H = 56
+let findWin: BrowserWindow | null = null
+let findVisible = false
+let findText = ''
+
+function positionFindBar(): void {
+  if (!win || !findWin || findWin.isDestroyed() || !findVisible) return
+  const bounds = win.getContentBounds()
+  findWin.setBounds({
+    x: Math.round(bounds.x + bounds.width - FIND_W - 16),
+    y: Math.round(bounds.y + TOP_BAR_HEIGHT + 8),
+    width: FIND_W,
+    height: FIND_H,
+  })
+}
+
+async function showFindBar(): Promise<void> {
+  if (!win || !views?.active()) return
+  if (!findWin || findWin.isDestroyed()) {
+    findWin = new BrowserWindow({
+      width: FIND_W,
+      height: FIND_H,
+      parent: win,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: false,
+      show: false,
+      hasShadow: false,
+      skipTaskbar: true,
+      webPreferences: { preload: path.join(__dirname, 'preload.js') },
+    })
+    await findWin.loadFile(path.join(__dirname, '../sidebar/findbar.html'))
+  }
+  findVisible = true
+  positionFindBar()
+  findWin.show()
+  findWin.webContents.send('find-focus')
+}
+
+function hideFindBar(): void {
+  if (!findVisible) return
+  findVisible = false
+  findText = ''
+  if (findWin && !findWin.isDestroyed()) findWin.hide()
+  const view = views?.active()
+  view?.webContents.stopFindInPage('clearSelection')
+  view?.webContents.focus()
+}
+
 async function pollTick(force = false): Promise<void> {
   if (!views) return
   const now = Date.now()
@@ -585,6 +721,12 @@ function buildMenu(): void {
         },
         { type: 'separator' },
         {
+          label: 'Print…',
+          accelerator: 'CmdOrCtrl+P',
+          click: () => targetContents()?.print(),
+        },
+        { type: 'separator' },
+        {
           // EXPERIMENT (local build only)
           label: 'Sign in with Chrome…',
           enabled: !!config.activeAccountId,
@@ -614,9 +756,37 @@ function buildMenu(): void {
       label: 'View',
       submenu: [
         {
+          label: 'Find on Page…',
+          accelerator: 'CmdOrCtrl+F',
+          click: () => void showFindBar(),
+        },
+        { type: 'separator' },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: () => adjustZoom(1) },
+        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => adjustZoom(-1) },
+        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: () => adjustZoom(null) },
+        { type: 'separator' },
+        // On ISO layouts (Spanish etc.) brackets live behind Option, so these
+        // are US-layout niceties; everyone else navigates with the two-finger
+        // trackpad swipe (see gmail-preload).
+        { label: 'Back', accelerator: 'CmdOrCtrl+[', click: goBack },
+        { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: goForward },
+        { type: 'separator' },
+        {
           label: 'Reload Account',
           accelerator: 'CmdOrCtrl+R',
           click: () => views?.active()?.webContents.reload(),
+        },
+        {
+          label: 'Force Reload Account',
+          accelerator: 'Shift+CmdOrCtrl+R',
+          click: () => views?.active()?.webContents.reloadIgnoringCache(),
+        },
+        {
+          label: 'Open Page in Browser',
+          click: () => {
+            const wc = targetContents()
+            if (wc) void shell.openExternal(wc.getURL())
+          },
         },
         {
           label: 'DevTools',
@@ -638,7 +808,22 @@ function buildMenu(): void {
     },
     {
       label: 'Accounts',
-      submenu: accountItems.length ? accountItems : [{ label: 'No Accounts', enabled: false }],
+      submenu: [
+        ...(accountItems.length ? accountItems : [{ label: 'No Accounts', enabled: false } as MenuItemConstructorOptions]),
+        { type: 'separator' },
+        {
+          label: 'Next Account',
+          accelerator: 'Shift+CmdOrCtrl+]',
+          enabled: config.accounts.length > 1,
+          click: () => cycleAccount(1),
+        },
+        {
+          label: 'Previous Account',
+          accelerator: 'Shift+CmdOrCtrl+[',
+          enabled: config.accounts.length > 1,
+          click: () => cycleAccount(-1),
+        },
+      ],
     },
     { role: 'windowMenu' },
   ]
@@ -671,7 +856,7 @@ function createWindow(): void {
       () => onGmailActivity(account.id),
       (id) => void offerImportOnBlock(id),
     )
-    extractPhoto(account, view.webContents)
+    wireAccountView(account, view)
     // EXPERIMENT: count launches an imported session survives
     if (account.imported) logLaunch(account.id)
   }
@@ -693,6 +878,14 @@ function createWindow(): void {
   win.on('focus', () => void pollTick(true))
   win.on('blur', hideAccountTooltip)
   win.on('move', hideAccountTooltip)
+  win.on('move', positionFindBar)
+  win.on('resize', positionFindBar)
+  // Safari-style trackpad navigation (needs the "swipe between pages"
+  // gesture enabled in System Settings). Fingers moving right = back.
+  win.on('swipe', (_event, direction) => {
+    if (direction === 'right') goBack()
+    if (direction === 'left') goForward()
+  })
 }
 
 void app.whenReady().then(() => {
@@ -726,6 +919,29 @@ void app.whenReady().then(() => {
     } else {
       hideAccountTooltip()
     }
+  })
+  ipcMain.on('find-query', (_event, text: string) => {
+    findText = typeof text === 'string' ? text : ''
+    const wc = views?.active()?.webContents
+    if (!wc) return
+    if (findText) {
+      wc.findInPage(findText)
+    } else {
+      wc.stopFindInPage('clearSelection')
+      findWin?.webContents.send('find-count', null)
+    }
+  })
+  ipcMain.on('find-step', (_event, forward: boolean) => {
+    const wc = views?.active()?.webContents
+    if (wc && findText) wc.findInPage(findText, { forward: forward !== false, findNext: true })
+  })
+  ipcMain.on('find-close', () => hideFindBar())
+  // Two-finger swipe gesture, reported by gmail-preload from wheel deltas
+  ipcMain.on('nav-back', (event) => {
+    if (event.sender.navigationHistory.canGoBack()) event.sender.navigationHistory.goBack()
+  })
+  ipcMain.on('nav-forward', (event) => {
+    if (event.sender.navigationHistory.canGoForward()) event.sender.navigationHistory.goForward()
   })
   ipcMain.on('account-menu', (_event, id: string) => {
     if (!win) return

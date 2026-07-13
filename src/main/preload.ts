@@ -14,3 +14,16 @@ contextBridge.exposeInMainWorld('tray', {
   updateOpen: () => ipcRenderer.send('update-open'),
   updateDismiss: () => ipcRenderer.send('update-dismiss'),
 })
+
+// API for the find-on-page bar (findbar.html, a small focusable child window)
+contextBridge.exposeInMainWorld('findbar', {
+  query: (text: string) => ipcRenderer.send('find-query', text),
+  step: (forward: boolean) => ipcRenderer.send('find-step', forward),
+  close: () => ipcRenderer.send('find-close'),
+  onCount: (callback: (count: { active: number; total: number } | null) => void) => {
+    ipcRenderer.on('find-count', (_event, count) => callback(count))
+  },
+  onFocus: (callback: () => void) => {
+    ipcRenderer.on('find-focus', () => callback())
+  },
+})
