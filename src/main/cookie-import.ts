@@ -16,10 +16,33 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 
+function chromeRoot(): string {
+  return path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome')
+}
+
+// Which Chrome profile to read. A user can have several ("Default", "Profile 1"…)
+// and only one holds their live Gmail session. Default is often stale, so we
+// auto-pick the profile whose Cookies file was written most recently (i.e. the
+// one actually in use), unless CHROME_PROFILE forces a choice.
 function chromeProfileDir(): string {
-  // Override with CHROME_PROFILE=Profile 1 etc. if the test account isn't in Default.
-  const profile = process.env.CHROME_PROFILE || 'Default'
-  return path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome', profile)
+  const root = chromeRoot()
+  if (process.env.CHROME_PROFILE) return path.join(root, process.env.CHROME_PROFILE)
+
+  let best: { dir: string; mtime: number } | null = null
+  for (const entry of fs.readdirSync(root)) {
+    if (entry === 'System Profile' || entry === 'Guest Profile') continue
+    const cookies = path.join(root, entry, 'Cookies')
+    let st: fs.Stats
+    try {
+      st = fs.statSync(cookies)
+    } catch {
+      continue
+    }
+    if (!best || st.mtimeMs > best.mtime) best = { dir: path.join(root, entry), mtime: st.mtimeMs }
+  }
+  if (!best) throw new Error(`No Chrome profile with cookies found under ${root}`)
+  console.log(`[cookie-spike] using Chrome profile: ${path.basename(best.dir)}`)
+  return best.dir
 }
 
 // Chrome's cookie encryption key on macOS: PBKDF2 over a password kept in the
