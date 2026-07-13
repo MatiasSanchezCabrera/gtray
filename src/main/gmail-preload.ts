@@ -46,3 +46,54 @@ function hide(): void {
 }
 
 hide()
+
+// Two-finger trackpad swipe = history back/forward, like Safari. Electron
+// removed the native scroll-touch events, so we rebuild the gesture from
+// wheel deltas: accumulate horizontal movement, but only when nothing under
+// the pointer can scroll horizontally in that direction (a wide email must
+// keep scrolling, not navigate). Fingers moving right = back.
+import { ipcRenderer } from 'electron'
+
+const SWIPE_THRESHOLD = 260 // accumulated deltaX before navigating
+let swipeAcc = 0
+let swipeFired = false
+let swipeReset: ReturnType<typeof setTimeout> | undefined
+
+function canScrollHorizontally(start: Element | null, dir: number): boolean {
+  for (let el = start; el instanceof Element; el = el.parentElement) {
+    const style = getComputedStyle(el)
+    if (/(auto|scroll)/.test(style.overflowX) && el.scrollWidth > el.clientWidth + 1) {
+      if (dir > 0 && el.scrollLeft + el.clientWidth < el.scrollWidth - 1) return true
+      if (dir < 0 && el.scrollLeft > 0) return true
+    }
+  }
+  return false
+}
+
+window.addEventListener(
+  'wheel',
+  (e) => {
+    if (e.ctrlKey) return // pinch gesture
+    // Vertical intent, or a real horizontal scroller under the pointer:
+    // this is scrolling, not a navigation gesture.
+    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) * 1.5 || canScrollHorizontally(e.target as Element, e.deltaX)) {
+      swipeAcc = 0
+      return
+    }
+    swipeAcc += e.deltaX
+    clearTimeout(swipeReset)
+    swipeReset = setTimeout(() => {
+      swipeAcc = 0
+      swipeFired = false
+    }, 250)
+    if (swipeFired) return
+    if (swipeAcc <= -SWIPE_THRESHOLD) {
+      swipeFired = true
+      ipcRenderer.send('nav-back')
+    } else if (swipeAcc >= SWIPE_THRESHOLD) {
+      swipeFired = true
+      ipcRenderer.send('nav-forward')
+    }
+  },
+  { passive: true },
+)

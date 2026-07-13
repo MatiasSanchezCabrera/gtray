@@ -724,6 +724,13 @@ void app.whenReady().then(() => {
     if (wc && findText) wc.findInPage(findText, { forward: forward !== false, findNext: true })
   })
   ipcMain.on('find-close', () => hideFindBar())
+  // Two-finger swipe gesture, reported by gmail-preload from wheel deltas
+  ipcMain.on('nav-back', (event) => {
+    if (event.sender.navigationHistory.canGoBack()) event.sender.navigationHistory.goBack()
+  })
+  ipcMain.on('nav-forward', (event) => {
+    if (event.sender.navigationHistory.canGoForward()) event.sender.navigationHistory.goForward()
+  })
   ipcMain.on('account-menu', (_event, id: string) => {
     if (!win) return
     hideAccountTooltip()
