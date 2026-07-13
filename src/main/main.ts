@@ -7,6 +7,7 @@ import { fetchUnread } from './polling'
 import { DMG_URL, fetchLatestVersion, isNewer, RELEASE_URL } from './updates'
 import { SIDEBAR_WIDTH, ViewManager } from './views'
 import { updateBadges } from './badges'
+import { runCookieSpike } from './cookie-import'
 
 const COLORS = ['#1a73e8', '#188038', '#e8710a', '#9334e6', '#d93025', '#129eaf']
 const POLL_ESTABLISHED_MS = 60_000
@@ -470,6 +471,13 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(() => {
+  // Throwaway spike: `npm run spike` transplants a Chrome Google session into
+  // an Electron partition to see if Gmail loads logged in. Inert otherwise.
+  if (process.argv.includes('--cookie-spike')) {
+    void runCookieSpike()
+    return
+  }
+
   config = loadConfig()
 
   // Dock icon. A packaged app gets it from the bundle (.icns), but in
