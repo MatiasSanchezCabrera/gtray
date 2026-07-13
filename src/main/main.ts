@@ -544,26 +544,11 @@ function buildMenu(): void {
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => adjustZoom(-1) },
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: () => adjustZoom(null) },
         { type: 'separator' },
+        // On ISO layouts (Spanish etc.) brackets live behind Option, so these
+        // are US-layout niceties; everyone else navigates with the two-finger
+        // trackpad swipe (see gmail-preload).
         { label: 'Back', accelerator: 'CmdOrCtrl+[', click: goBack },
         { label: 'Forward', accelerator: 'CmdOrCtrl+]', click: goForward },
-        // Brackets need Option on ISO layouts (Spanish etc.), so Cmd+[ can't
-        // even be typed there. Hidden aliases on Cmd+Ctrl+arrows: layout
-        // independent and inert in text fields (plain Cmd+arrows would steal
-        // cursor movement while composing; Cmd+Alt often hosts user hotkeys).
-        {
-          label: 'Back (alias)',
-          visible: false,
-          acceleratorWorksWhenHidden: true,
-          accelerator: 'Cmd+Ctrl+Left',
-          click: goBack,
-        },
-        {
-          label: 'Forward (alias)',
-          visible: false,
-          acceleratorWorksWhenHidden: true,
-          accelerator: 'Cmd+Ctrl+Right',
-          click: goForward,
-        },
         { type: 'separator' },
         {
           label: 'Reload Account',
