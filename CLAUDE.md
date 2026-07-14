@@ -54,8 +54,11 @@ build.mjs                 esbuild -> dist/
 scripts/whiten-icon.cjs   generates assets/icon.png from the source (see assets/README.md)
 landing/                  gtray.app website (static HTML/CSS/JS, no build step)
 .github/workflows/
-  release.yml             v* tag -> build + .dmg + checksums -> GitHub Release
-                          (signs/notarizes only if the Apple secrets exist)
+  release.yml             v* tag -> build + .dmg + experimental Windows .exe
+                          + checksums -> GitHub Release (signs/notarizes the
+                          .dmg only if the Apple secrets exist; the .exe is
+                          unsigned and best-effort — its job never blocks a
+                          release). Windows is release-only: not on the landing.
   pages.yml               deploys landing/ to GitHub Pages on push to main
 ```
 
@@ -90,9 +93,29 @@ landing/                  gtray.app website (static HTML/CSS/JS, no build step)
     with Advanced Protection might not get in by design (not confirmed that
     they block; in testing every normal account got in).
 
-- **Browser behavior:** external links → default browser; Gmail popups
-  (Compose) → own window; downloads → ~/Downloads; closing the window hides it
-  and the app keeps counting in the background (⌘Q quits).
+- **Chrome sign-in fallback (experimental, macOS-only):** when the embedded
+  login hits Google's block, GTray offers to launch a REAL Chrome with a
+  fresh throwaway profile (`cookie-import.ts`); the user signs in there and
+  the Google session cookies are imported into the account's partition
+  (validated in a temp session first). All local. Durability of imported
+  sessions is tracked in `experiment-log.ts` (userData/import-experiment.json,
+  no cookie values; File → Show Import Experiment Log). Entry points are
+  gated to darwin in main.ts.
+
+- **Browser behavior:** links in emails → default browser (Google's
+  `google.com/url?q=` redirector is unwrapped first; see `unwrapRedirect` and
+  the `isSessionPopup` allow-list in views.ts); Gmail popups (Compose, print)
+  and Calendar/Meet/login popups → own window; downloads → ~/Downloads;
+  closing the window hides it and the app keeps counting in the background
+  (⌘Q quits) — macOS only: on Windows/Linux closing quits (no Dock badge or
+  tray icon there yet).
+
+- **Windows build (experimental):** release.yml attaches an unsigned NSIS
+  `GTray-x64.exe` to every release (SmartScreen warns; macOS stays primary).
+  The disguise is platform-aware (Firefox/Chrome UA tokens and `oscpu` match
+  the real OS); non-macOS gets the native window frame, no unread badge yet
+  (taskbar overlay icon is in BACKLOG.md), and the Chrome sign-in fallback is
+  hidden. Not advertised on the landing.
 
 - **Profile photos:** extracted from the logged-in Gmail via `executeJavaScript`
   (no OAuth), cached in config, with a colored-initial fallback.

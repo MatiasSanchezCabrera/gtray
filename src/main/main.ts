@@ -468,8 +468,10 @@ async function importSessionFromChrome(accountId: string): Promise<void> {
 }
 
 // Shown when the embedded login hits Google's "browser may not be secure" block.
+// The Chrome sign-in fallback is macOS-only for now (cookie-import.ts drives
+// the macOS Chrome binary), so elsewhere the block dialog is not offered.
 async function offerImportOnBlock(accountId: string): Promise<void> {
-  if (!win) return
+  if (!win || process.platform !== 'darwin') return
   win.show()
   const { response } = await dialog.showMessageBox(win, {
     type: 'question',
@@ -730,28 +732,32 @@ function buildMenu(): void {
           accelerator: 'CmdOrCtrl+P',
           click: () => targetContents()?.print(),
         },
-        { type: 'separator' },
-        {
-          // EXPERIMENT (local build only)
-          label: 'Sign in with Chrome…',
-          enabled: !!config.activeAccountId,
-          click: () => {
-            if (config.activeAccountId) void importSessionFromChrome(config.activeAccountId)
-          },
-        },
-        {
-          label: 'Remove Imported Session',
-          enabled: !!config.accounts.find((a) => a.id === config.activeAccountId)?.imported,
-          click: () => {
-            if (config.activeAccountId) void removeImportedSession(config.activeAccountId)
-          },
-        },
-        {
-          label: 'Show Import Experiment Log',
-          click: () => {
-            if (win) void dialog.showMessageBox(win, { type: 'info', message: 'Import experiment', detail: summaryText() })
-          },
-        },
+        // Experimental Chrome sign-in fallback: macOS-only (see cookie-import.ts)
+        ...(process.platform === 'darwin'
+          ? ([
+              { type: 'separator' },
+              {
+                label: 'Sign in with Chrome…',
+                enabled: !!config.activeAccountId,
+                click: () => {
+                  if (config.activeAccountId) void importSessionFromChrome(config.activeAccountId)
+                },
+              },
+              {
+                label: 'Remove Imported Session',
+                enabled: !!config.accounts.find((a) => a.id === config.activeAccountId)?.imported,
+                click: () => {
+                  if (config.activeAccountId) void removeImportedSession(config.activeAccountId)
+                },
+              },
+              {
+                label: 'Show Import Experiment Log',
+                click: () => {
+                  if (win) void dialog.showMessageBox(win, { type: 'info', message: 'Import experiment', detail: summaryText() })
+                },
+              },
+            ] as MenuItemConstructorOptions[])
+          : []),
         { type: 'separator' },
         { role: 'close' },
       ],
@@ -874,11 +880,14 @@ function createWindow(): void {
   selectAccount(config.activeAccountId ?? config.accounts[0]?.id ?? null, false)
 
   win.webContents.on('did-finish-load', () => pushState())
-  // Closing the window hides it; the app keeps updating counters. Cmd+Q quits.
+  // macOS: closing the window hides it; the app keeps updating counters and
+  // the Dock brings it back (Cmd+Q quits). Windows/Linux have no Dock badge
+  // yet and a hidden window would leave the app running unreachable (no tray
+  // icon), so there closing the window quits.
   win.on('close', (event) => {
     config.windowState = win!.getBounds()
     saveConfig(config)
-    if (!quitting) {
+    if (!quitting && process.platform === 'darwin') {
       event.preventDefault()
       win!.hide()
     }
@@ -957,11 +966,15 @@ void app.whenReady().then(() => {
     const imported = !!config.accounts.find((a) => a.id === id)?.imported
     Menu.buildFromTemplate([
       { label: 'Reload', click: () => views?.get(id)?.webContents.reload() },
-      { type: 'separator' },
-      // EXPERIMENT (local build only)
-      { label: 'Sign in with Chrome…', click: () => void importSessionFromChrome(id) },
-      ...(imported
-        ? [{ label: 'Remove Imported Session', click: () => void removeImportedSession(id) }]
+      // Experimental Chrome sign-in fallback: macOS-only (see cookie-import.ts)
+      ...(process.platform === 'darwin'
+        ? [
+            { type: 'separator' as const },
+            { label: 'Sign in with Chrome…', click: () => void importSessionFromChrome(id) },
+            ...(imported
+              ? [{ label: 'Remove Imported Session', click: () => void removeImportedSession(id) }]
+              : []),
+          ]
         : []),
       { type: 'separator' },
       { label: 'Remove Account…', click: () => void removeAccount(id) },
@@ -997,5 +1010,7 @@ app.on('before-quit', () => {
   quitting = true
 })
 app.on('window-all-closed', () => {
-  // The app keeps running in the background to keep the counters fresh
+  // macOS: keep running in the background so the counters stay fresh.
+  // Windows/Linux: quit — there is no Dock badge or tray icon to serve.
+  if (process.platform !== 'darwin') app.quit()
 })

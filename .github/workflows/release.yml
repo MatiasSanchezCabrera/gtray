@@ -1,7 +1,9 @@
-# Release: pushing a v* tag builds, packages the .dmg and publishes a
-# GitHub Release with checksums. If the Apple signing secrets exist, it
-# signs and notarizes; otherwise it publishes an unsigned build (useful
-# before having an Apple Developer account).
+# Release: pushing a v* tag builds and publishes a GitHub Release with the
+# macOS .dmg (signed and notarized if the Apple secrets exist) and an
+# experimental unsigned Windows NSIS installer, plus checksums.
+#
+# The macOS build is the primary one: if the Windows job fails, the release
+# is published anyway with the .dmg only.
 #
 # Secrets for signing/notarizing (Settings -> Secrets and variables -> Actions):
 #   CSC_LINK                     "Developer ID Application" certificate (.p12) in base64
@@ -21,7 +23,7 @@ permissions:
   actions: write # to dispatch the Pages deploy after committing version.json
 
 jobs:
-  release:
+  build-mac:
     runs-on: macos-14 # arm64 runner: produces the .dmg for Apple Silicon
     steps:
       - uses: actions/checkout@v4
@@ -56,18 +58,69 @@ jobs:
             CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg --publish never
           fi
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg
+          path: release/*.dmg
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Package NSIS installer (unsigned; SmartScreen will warn)
+        run: npx electron-builder --win nsis --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: release/GTray-x64.exe
+          if-no-files-found: error
+
+  publish:
+    needs: [build-mac, build-windows]
+    # Publish as long as the macOS build succeeded; the experimental Windows
+    # installer is best-effort and must never block a release
+    if: ${{ !cancelled() && needs.build-mac.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
       - name: Checksums
         run: |
           cd release
-          shasum -a 256 *.dmg > checksums.txt
+          shasum -a 256 * > checksums.txt
           cat checksums.txt
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" release/*.dmg release/checksums.txt \
+          if ls release/*.exe >/dev/null 2>&1; then
+            cat > notes.md <<'EOF'
+          > **Windows build (experimental):** `GTray-x64.exe` is unsigned, so SmartScreen will warn ("Windows protected your PC" → More info → Run anyway). No unread badge on Windows yet; closing the window quits the app. The macOS build is the primary, fully supported one.
+          EOF
+          else
+            echo "The Windows build failed for this tag; this release ships the macOS .dmg only." > notes.md
+          fi
+          gh release create "$GITHUB_REF_NAME" release/* \
             --title "GTray $GITHUB_REF_NAME" \
+            --notes-file notes.md \
             --generate-notes
 
       # The in-app update check reads gtray.app/version.json; committing it to

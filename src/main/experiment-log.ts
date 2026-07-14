@@ -2,7 +2,7 @@
 // we need to judge session durability over weeks: when a session was imported,
 // how many app launches it survived, when it was last seen working, and when
 // (if ever) it died. NEVER stores cookie values. Lives in userData and is
-// easy to inspect or delete. Not shipped in releases.
+// easy to inspect or delete (File → Show Import Experiment Log).
 
 import { app } from 'electron'
 import * as fs from 'fs'

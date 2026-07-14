@@ -16,7 +16,9 @@ the unread mail of every account even when the window is closed.
 **Website:** [gtray.app](https://gtray.app) ·
 **Support:** [Ko-fi](https://ko-fi.com/gtray)
 
-> Requires macOS 13+ on Apple Silicon.
+> Requires macOS 13+ on Apple Silicon. Each release also attaches an
+> **experimental Windows installer** (`GTray-x64.exe`): unsigned (SmartScreen
+> will warn), no unread badge yet, and closing the window quits the app.
 
 ## Why
 
@@ -55,7 +57,8 @@ GitHub Actions from this code, with published checksums):
 
 ### Shortcuts
 
-`⌘1…⌘9` switch inbox · `⌘N` add account · `⌘R` reload
+`⌘1…⌘9` switch inbox · `⌘N` add account · `⌘R` reload · `⌘F` find on page ·
+`⌘+`/`⌘−`/`⌘0` zoom · two-finger swipe navigates history
 
 ## Development
 
@@ -73,8 +76,10 @@ Pending improvements: [`BACKLOG.md`](./BACKLOG.md).
 
 Releases are published with the [`release.yml`](./.github/workflows/release.yml)
 workflow: pushing a `v*` tag makes GitHub Actions build, package the `.dmg`
-(signed and notarized if the repo has the certificates configured) and upload
-it to the Release with its checksums.
+(signed and notarized if the repo has the certificates configured) plus the
+experimental Windows `.exe`, and upload them to the Release with their
+checksums. The Windows build is best-effort: if it fails, the release ships
+with the `.dmg` only.
 
 ## A note on Google login
 
@@ -82,7 +87,10 @@ Google blocks embedded browsers at login. GTray presents itself with a Firefox
 user agent and hides Chromium's fingerprints so the flow works (see
 `src/main/gmail-preload.ts` and `src/main/views.ts`). This is the most fragile
 part of the project: if Google hardens its detection, it may break until the
-app is updated.
+app is updated. If Google still blocks the embedded sign-in, GTray on macOS
+offers an experimental fallback: it opens a real Google Chrome window with a
+fresh throwaway profile for you to sign in, then brings that session into the
+app. Everything stays on your machine — no servers involved.
 
 ## Support
 
