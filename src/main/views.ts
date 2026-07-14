@@ -27,8 +27,10 @@ function isMeetHost(url: string): boolean {
   }
 }
 
-// Domains that are browsed inside the app (Gmail + Google's login flow).
-// Everything else opens in the default browser.
+// Domains a GTray window may navigate to in place (Gmail + Google's login
+// flow, which bounces through youtube/gstatic for cookie sync). Navigation
+// anywhere else opens in the default browser. This governs navigation only;
+// which links may open a new GTray window is the stricter isSessionPopup.
 function isGoogleHost(url: string): boolean {
   try {
     const host = new URL(url).hostname
@@ -39,6 +41,42 @@ function isGoogleHost(url: string): boolean {
   } catch {
     return false
   }
+}
+
+// Popups that must stay inside GTray because they need the account's session
+// cookies: Gmail's own windows (compose pop-out, print, show original),
+// attachment viewers on googleusercontent, Calendar, and login popups. Meet
+// gets its own real-Chrome window (see isMeetHost). Links to anything else —
+// including other Google products like Drive or YouTube — open in the
+// default browser.
+function isSessionPopup(url: string): boolean {
+  try {
+    const host = new URL(url).hostname
+    return (
+      host === 'mail.google.com' ||
+      host === 'calendar.google.com' ||
+      host === 'accounts.google.com' ||
+      /(^|\.)googleusercontent\.com$/.test(host)
+    )
+  } catch {
+    return false
+  }
+}
+
+// Gmail wraps many email links in Google's redirector
+// (https://www.google.com/url?q=<target>). Route on the real target:
+// otherwise the redirector counts as a Google URL, opens a GTray window,
+// and only then bounces to the default browser.
+function unwrapRedirect(url: string): string {
+  try {
+    const u = new URL(url)
+    if (u.pathname === '/url' && isGoogleHost(url)) {
+      return u.searchParams.get('q') ?? u.searchParams.get('url') ?? url
+    }
+  } catch {
+    // not a URL; fall through
+  }
+  return url
 }
 
 function dedupPath(dir: string, filename: string): string {
@@ -73,16 +111,17 @@ function configureSession(ses: Session): void {
   })
 }
 
-export function wireGmailContents(wc: WebContents, chrome = false): void {
+export function wireGmailContents(wc: WebContents, chrome = false, popup = false): void {
   wc.setWindowOpenHandler(({ url }) => {
+    const target = unwrapRedirect(url)
     // Meet links (from Gmail or Calendar) can't run under the Firefox
     // disguise: give them a real-Chrome window instead of a regular popup
-    if (!chrome && isMeetHost(url)) {
-      openAppWindow(wc.session, url)
+    if (!chrome && isMeetHost(target)) {
+      openAppWindow(wc.session, target)
       return { action: 'deny' }
     }
     // Gmail popups (Compose, print) and login popups → own window
-    if (url === 'about:blank' || isGoogleHost(url)) {
+    if (target === 'about:blank' || isSessionPopup(target)) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -102,17 +141,23 @@ export function wireGmailContents(wc: WebContents, chrome = false): void {
         },
       }
     }
-    void shell.openExternal(url)
+    void shell.openExternal(target)
     return { action: 'deny' }
   })
   wc.on('did-create-window', (child) => {
     if (chrome) child.webContents.setUserAgent(CHROME_UA)
-    wireGmailContents(child.webContents, chrome)
+    wireGmailContents(child.webContents, chrome, true)
   })
   wc.on('will-navigate', (event, url) => {
     if (!isGoogleHost(url)) {
       event.preventDefault()
-      void shell.openExternal(url)
+      void shell.openExternal(unwrapRedirect(url))
+      // An about:blank popup that ends up here was just a vehicle for an
+      // external link (window.open + location = url): nothing was ever
+      // rendered in it, so close it instead of leaving an empty window
+      if (popup && (wc.getURL() === '' || wc.getURL() === 'about:blank')) {
+        BrowserWindow.fromWebContents(wc)?.close()
+      }
     }
   })
 }
